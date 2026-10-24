@@ -1,0 +1,19 @@
+# Автозапуск бота на Linux-сервері (systemd).
+# Встановлення: див. README.md, розділ «Запуск 24/7 на сервері».
+
+[Unit]
+Description=Barber Bot (Telegram + AI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=barberbot
+WorkingDirectory=/opt/barber-bot
+ExecStart=/usr/bin/python3 /opt/barber-bot/run.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
