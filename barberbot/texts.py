@@ -177,9 +177,12 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/book — записати клієнта (дзвінок, візит)\n"
                       "/today — записи на сьогодні\n"
                       "/tomorrow — записи на завтра\n"
+                      "/day 30.10 — записи на будь-яку дату\n"
                       "/week — записи на 7 днів\n"
                       "/all — усі майбутні записи\n"
-                      "/stats — статистика за 30 днів\n"
+                      "/find — пошук клієнта (ім'я, @username чи номер)\n"
+                      "/stats — статистика й виручка за 30 днів (/stats 7 — за 7)\n"
+                      "/export — вивантажити записи в Excel\n"
                       "/block — закрити час (вихідний, відпустка, запис по телефону)\n"
                       "/blocks — список закритого часу\n"
                       "/pause — вимкнути AI: усі повідомлення клієнтів ідуть вам\n"
@@ -214,16 +217,67 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_reply_sent": "✅ Надіслано: {client}",
         "adm_reply_failed": "⚠️ Не вдалося надіслати — можливо, клієнт заблокував бота.",
         "adm_resumed": "▶️ AI знову відповідає: {client}",
-        "adm_day_header": "📅 <b>{day}</b> — записів: {count}",
-        "adm_day_empty": "📅 <b>{day}</b> — записів немає.",
-        "adm_legend": "\n\n🚫 — клієнт не прийшов · 🗑 — скасувати запис",
+        "adm_day_header": "📅 <b>{day}</b>{master} — записів: {count}",
+        "adm_day_empty": "📅 <b>{day}</b>{master} — записів немає.",
         "adm_item": "\n\n<b>{n}. {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}{flags}",
         "adm_list_day": "\n\n📅 <b>{day}</b> — записів: {count}",
-        "adm_list_hint": "\n\nЩоб скасувати запис, натисніть кнопку з його номером 👇",
+        "adm_list_hint": "\n\nНатисніть запис, щоб перенести, скасувати чи відмітити оплату 👇",
+        "adm_day_master": " · {name}",
+        "adm_day_hint": "\n\nНатисніть запис, щоб перенести, скасувати, відмітити неявку чи оплату 👇",
+        "adm_day_pick": "📅 Оберіть день:",
+        "adm_day_usage": "📅 Вкажіть дату, наприклад: /day 30.10 або /day завтра",
+        "btn_adm_booking_item": "⚙️ {n} · {when} · {client}",
+        "btn_day_prev": "◀️ {day}",
+        "btn_day_next": "{day} ▶️",
+        "btn_day_pick": "📅 Дата",
+        "btn_master_all": "👥 Усі",
+        "btn_master_selected": "✅ {name}",
+        "adm_card": "📋 <b>Запис #{id}</b>\n\n{summary}\n💰 {price}",
+        "adm_card_source_buttons": "\n📱 Записався сам",
+        "adm_card_source_ai": "\n🤖 Записався через AI-чат",
+        "adm_card_source_admin": "\n📞 Записав адміністратор",
+        "adm_card_noshow": "\n🚫 Клієнт не прийшов",
+        "adm_card_cancelled": "\n❌ Скасовано — {by}",
+        "adm_card_confirmed": "\n✅ Клієнт підтвердив, що прийде",
+        "btn_adm_resched": "🔁 Перенести",
+        "btn_adm_cancel_short": "🗑 Скасувати",
+        "btn_adm_noshow": "🚫 Не прийшов",
+        "btn_adm_client": "👤 Клієнт",
+        "btn_adm_write": "✉️ Написати",
+        "adm_resched_day": "🔁 <b>Перенесення запису #{id}</b>\n\n{summary}\n\nОберіть новий день 👇",
+        "adm_resched_none": "🔁 Вільних днів для перенесення немає.\n\n{summary}",
+        "adm_resched_time": "🔁 <b>#{id}</b> · {service} · {master}\n📅 {day} — оберіть час 👇",
+        "adm_resched_confirm": "🔁 <b>Перенести запис?</b>\n\n💈 {service}\n👤 {client}\nБуло: {old}\nСтане: <b>{new}</b>\n\n{who}",
+        "btn_adm_resched_yes": "✅ Перенести",
+        "adm_resched_same": "Це той самий час — нічого не змінено.",
+        "adm_resched_done": "🔁 <b>Перенесено</b>\n\n{summary}\n\nБуло: {old}\n{who}",
+        "adm_resched_notified": "Клієнта повідомлено.",
+        "adm_resched_offline": "Клієнта немає в Telegram — повідомте його самі.",
+        "adm_find_usage": "🔎 Пошук клієнта: /find Іван, /find @username або /find 0671 (частина номера)",
+        "adm_find_none": "🔎 За «{q}» нікого не знайдено.",
+        "adm_find_many": "🔎 Знайдено: {count}. Оберіть клієнта 👇",
+        "btn_adm_client_item": "👤 {label}",
+        "adm_client_card": "👤 <b>{name}</b>\n{contacts}\n{tg}\n\n📊 Візитів: {done} · неявок: {noshow} · скасувань: {cancelled}\n💰 Разом: {spent}{last}{upcoming}{notes}",
+        "adm_client_tg_yes": "✉️ Є в боті",
+        "adm_client_tg_no": "📵 Немає в Telegram",
+        "adm_client_last": "\n🗓 Останній візит: {day} · {service}",
+        "adm_client_upcoming": "\n\n<b>Майбутні записи:</b>{items}",
+        "adm_client_upcoming_item": "\n• {when} · {service}",
+        "adm_client_notes": "\n\n📝 {notes}",
+        "btn_adm_client_booking": "⚙️ {when} · {service}",
+        "btn_adm_client_book": "📞 Записати",
+        "adm_export_usage": "📊 /export — записи за 30 днів і всі майбутні; /export 90 — за 90 днів.",
+        "adm_export_empty": "За цей період записів немає.",
+        "adm_export_caption": "📊 Записи з {start} (і всі майбутні): {count}",
+        "adm_export_headers": "Дата|Час|Кінець|Майстер|Послуга|Ціна|Статус|Клієнт|Телефон|Telegram|Джерело|Передоплата|Коментар|Створено",
+        "adm_export_sheet": "Записи",
+        "adm_export_statuses": "заплановано|відбувся|не прийшов|скасовано",
+        "adm_export_sources": "сам|AI-чат|адмін",
+        "adm_export_prepay": "очікуємо|каже, що оплатив|оплачено",
+        "adm_master_revenue": "\n   {name}: {count} · {revenue}",
+        "adm_evening_report": "🌙 <b>Підсумок дня · {day}</b>\n\n✅ Відбулося: {done} · 🚫 неявок: {noshow} · ❌ скасовано: {cancelled}\n💰 Виручка: <b>{revenue}</b>{by_master}\n\n📅 Завтра записів: {tomorrow}",
+        "client_rescheduled_by_admin": "🔁 Адміністратор переніс ваш запис:\n💈 {service} · {master}\nБуло: {old}\nСтало: <b>{new}</b>\n\nЯкщо час не підходить — змініть у «🗓 Мої записи» або напишіть нам.",
         "adm_booking_summary": "<b>{day}, {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}",
-        "btn_adm_noshow_n": "🚫 {n} не прийшов",
-        "btn_adm_cancel_n": "🗑 {n} скасувати",
-        "btn_adm_cancel_item": "🗑 {n} · {when} · {client}",
         "adm_noshow_done": "🚫 {client} ({time}) — не прийшов",
         "adm_cancel_ask": "Скасувати цей запис?\n\n{booking}\n\n{who}",
         "adm_cancel_notify": "Клієнт отримає повідомлення в Telegram.",
@@ -246,8 +300,6 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_prepay_waiting": "\n💳 ⏳ чекаємо передоплату",
         "adm_prepay_claimed": "\n💳 ❔ клієнт каже, що оплатив — перевірте",
         "adm_prepay_paid": "\n💳 ✅ передоплату отримано",
-        "btn_adm_prepay_n": "💳 {n} — оплату отримано",
-        "btn_adm_prepay_item": "💳 {n} · оплату отримано · {client}",
         "adm_cancelled_by_unpaid": "не оплачено",
         "adm_cancelled_unpaid": "⏰ <b>Запис скасовано автоматично</b> — передоплату не підтверджено за {hours} год.\n\n{booking}",
         "btn_adm_clear_cancelled": "🧹 Прибрати скасовані ({count})",
@@ -321,6 +373,9 @@ TEXTS: dict[str, dict[str, str]] = {
                      "• уночі (22:00–08:00): {night}\n"
                      "• відбулося: {done} · не прийшли: {noshow} · скасовано: {cancelled}\n"
                      "• попереду: {upcoming}\n\n"
+                     "<b>Виручка</b>\n"
+                     "• {revenue} · середній чек {avg_check}{by_master}\n"
+                     "• очікується з майбутніх записів: {expected}\n\n"
                      "<b>Діалоги</b>\n"
                      "• клієнтів писали: {clients}\n"
                      "• передано вам: {handoffs}\n"
@@ -337,6 +392,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_today": "Записи на сьогодні",
         "cmd_tomorrow": "Записи на завтра",
         "cmd_book": "Записати клієнта",
+        "cmd_day": "Записи на дату",
+        "cmd_find": "Пошук клієнта",
+        "cmd_export": "Вивантажити в Excel",
         "cmd_week": "Записи на 7 днів",
         "cmd_all": "Усі майбутні записи",
         "cmd_stats": "Статистика",
@@ -486,9 +544,12 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/book — записать клиента (звонок, визит)\n"
                       "/today — записи на сегодня\n"
                       "/tomorrow — записи на завтра\n"
+                      "/day 30.10 — записи на любую дату\n"
                       "/week — записи на 7 дней\n"
                       "/all — все будущие записи\n"
-                      "/stats — статистика за 30 дней\n"
+                      "/find — поиск клиента (имя, @username или номер)\n"
+                      "/stats — статистика и выручка за 30 дней (/stats 7 — за 7)\n"
+                      "/export — выгрузить записи в Excel\n"
                       "/block — закрыть время (выходной, отпуск, запись по телефону)\n"
                       "/blocks — список закрытого времени\n"
                       "/pause — выключить AI: все сообщения клиентов идут вам\n"
@@ -523,16 +584,67 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_reply_sent": "✅ Отправлено: {client}",
         "adm_reply_failed": "⚠️ Не удалось отправить — возможно, клиент заблокировал бота.",
         "adm_resumed": "▶️ AI снова отвечает: {client}",
-        "adm_day_header": "📅 <b>{day}</b> — записей: {count}",
-        "adm_day_empty": "📅 <b>{day}</b> — записей нет.",
-        "adm_legend": "\n\n🚫 — клиент не пришёл · 🗑 — отменить запись",
+        "adm_day_header": "📅 <b>{day}</b>{master} — записей: {count}",
+        "adm_day_empty": "📅 <b>{day}</b>{master} — записей нет.",
         "adm_item": "\n\n<b>{n}. {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}{flags}",
         "adm_list_day": "\n\n📅 <b>{day}</b> — записей: {count}",
-        "adm_list_hint": "\n\nЧтобы отменить запись, нажмите кнопку с её номером 👇",
+        "adm_list_hint": "\n\nНажмите запись, чтобы перенести, отменить или отметить оплату 👇",
+        "adm_day_master": " · {name}",
+        "adm_day_hint": "\n\nНажмите запись, чтобы перенести, отменить, отметить неявку или оплату 👇",
+        "adm_day_pick": "📅 Выберите день:",
+        "adm_day_usage": "📅 Укажите дату, например: /day 30.10 или /day завтра",
+        "btn_adm_booking_item": "⚙️ {n} · {when} · {client}",
+        "btn_day_prev": "◀️ {day}",
+        "btn_day_next": "{day} ▶️",
+        "btn_day_pick": "📅 Дата",
+        "btn_master_all": "👥 Все",
+        "btn_master_selected": "✅ {name}",
+        "adm_card": "📋 <b>Запись #{id}</b>\n\n{summary}\n💰 {price}",
+        "adm_card_source_buttons": "\n📱 Записался сам",
+        "adm_card_source_ai": "\n🤖 Записался через AI-чат",
+        "adm_card_source_admin": "\n📞 Записал администратор",
+        "adm_card_noshow": "\n🚫 Клиент не пришёл",
+        "adm_card_cancelled": "\n❌ Отменено — {by}",
+        "adm_card_confirmed": "\n✅ Клиент подтвердил, что придёт",
+        "btn_adm_resched": "🔁 Перенести",
+        "btn_adm_cancel_short": "🗑 Отменить",
+        "btn_adm_noshow": "🚫 Не пришёл",
+        "btn_adm_client": "👤 Клиент",
+        "btn_adm_write": "✉️ Написать",
+        "adm_resched_day": "🔁 <b>Перенос записи #{id}</b>\n\n{summary}\n\nВыберите новый день 👇",
+        "adm_resched_none": "🔁 Свободных дней для переноса нет.\n\n{summary}",
+        "adm_resched_time": "🔁 <b>#{id}</b> · {service} · {master}\n📅 {day} — выберите время 👇",
+        "adm_resched_confirm": "🔁 <b>Перенести запись?</b>\n\n💈 {service}\n👤 {client}\nБыло: {old}\nСтанет: <b>{new}</b>\n\n{who}",
+        "btn_adm_resched_yes": "✅ Перенести",
+        "adm_resched_same": "Это то же время — ничего не изменено.",
+        "adm_resched_done": "🔁 <b>Перенесено</b>\n\n{summary}\n\nБыло: {old}\n{who}",
+        "adm_resched_notified": "Клиент уведомлён.",
+        "adm_resched_offline": "Клиента нет в Telegram — сообщите ему сами.",
+        "adm_find_usage": "🔎 Поиск клиента: /find Иван, /find @username или /find 0671 (часть номера)",
+        "adm_find_none": "🔎 По «{q}» никого не найдено.",
+        "adm_find_many": "🔎 Найдено: {count}. Выберите клиента 👇",
+        "btn_adm_client_item": "👤 {label}",
+        "adm_client_card": "👤 <b>{name}</b>\n{contacts}\n{tg}\n\n📊 Визитов: {done} · неявок: {noshow} · отмен: {cancelled}\n💰 Всего: {spent}{last}{upcoming}{notes}",
+        "adm_client_tg_yes": "✉️ Есть в боте",
+        "adm_client_tg_no": "📵 Нет в Telegram",
+        "adm_client_last": "\n🗓 Последний визит: {day} · {service}",
+        "adm_client_upcoming": "\n\n<b>Будущие записи:</b>{items}",
+        "adm_client_upcoming_item": "\n• {when} · {service}",
+        "adm_client_notes": "\n\n📝 {notes}",
+        "btn_adm_client_booking": "⚙️ {when} · {service}",
+        "btn_adm_client_book": "📞 Записать",
+        "adm_export_usage": "📊 /export — записи за 30 дней и все будущие; /export 90 — за 90 дней.",
+        "adm_export_empty": "За этот период записей нет.",
+        "adm_export_caption": "📊 Записи с {start} (и все будущие): {count}",
+        "adm_export_headers": "Дата|Время|Конец|Мастер|Услуга|Цена|Статус|Клиент|Телефон|Telegram|Источник|Предоплата|Комментарий|Создано",
+        "adm_export_sheet": "Записи",
+        "adm_export_statuses": "запланировано|состоялся|не пришёл|отменено",
+        "adm_export_sources": "сам|AI-чат|админ",
+        "adm_export_prepay": "ожидаем|говорит, что оплатил|оплачено",
+        "adm_master_revenue": "\n   {name}: {count} · {revenue}",
+        "adm_evening_report": "🌙 <b>Итоги дня · {day}</b>\n\n✅ Состоялось: {done} · 🚫 неявок: {noshow} · ❌ отменено: {cancelled}\n💰 Выручка: <b>{revenue}</b>{by_master}\n\n📅 Завтра записей: {tomorrow}",
+        "client_rescheduled_by_admin": "🔁 Администратор перенёс вашу запись:\n💈 {service} · {master}\nБыло: {old}\nСтало: <b>{new}</b>\n\nЕсли время не подходит — измените в «🗓 Мои записи» или напишите нам.",
         "adm_booking_summary": "<b>{day}, {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}",
-        "btn_adm_noshow_n": "🚫 {n} не пришёл",
-        "btn_adm_cancel_n": "🗑 {n} отменить",
-        "btn_adm_cancel_item": "🗑 {n} · {when} · {client}",
         "adm_noshow_done": "🚫 {client} ({time}) — не пришёл",
         "adm_cancel_ask": "Отменить эту запись?\n\n{booking}\n\n{who}",
         "adm_cancel_notify": "Клиент получит сообщение в Telegram.",
@@ -555,8 +667,6 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_prepay_waiting": "\n💳 ⏳ ждём предоплату",
         "adm_prepay_claimed": "\n💳 ❔ клиент говорит, что оплатил — проверьте",
         "adm_prepay_paid": "\n💳 ✅ предоплата получена",
-        "btn_adm_prepay_n": "💳 {n} — оплата получена",
-        "btn_adm_prepay_item": "💳 {n} · оплата получена · {client}",
         "adm_cancelled_by_unpaid": "не оплачено",
         "adm_cancelled_unpaid": "⏰ <b>Запись отменена автоматически</b> — предоплата не подтверждена за {hours} ч.\n\n{booking}",
         "btn_adm_clear_cancelled": "🧹 Убрать отменённые ({count})",
@@ -630,6 +740,9 @@ TEXTS: dict[str, dict[str, str]] = {
                      "• ночью (22:00–08:00): {night}\n"
                      "• состоялось: {done} · не пришли: {noshow} · отменено: {cancelled}\n"
                      "• впереди: {upcoming}\n\n"
+                     "<b>Выручка</b>\n"
+                     "• {revenue} · средний чек {avg_check}{by_master}\n"
+                     "• ожидается с будущих записей: {expected}\n\n"
                      "<b>Диалоги</b>\n"
                      "• клиентов писали: {clients}\n"
                      "• передано вам: {handoffs}\n"
@@ -645,6 +758,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_today": "Записи на сегодня",
         "cmd_tomorrow": "Записи на завтра",
         "cmd_book": "Записать клиента",
+        "cmd_day": "Записи на дату",
+        "cmd_find": "Поиск клиента",
+        "cmd_export": "Выгрузить в Excel",
         "cmd_week": "Записи на 7 дней",
         "cmd_all": "Все будущие записи",
         "cmd_stats": "Статистика",
@@ -794,9 +910,12 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/book — book a client (call, walk-in)\n"
                       "/today — today's bookings\n"
                       "/tomorrow — tomorrow's bookings\n"
+                      "/day 30.10 — bookings for any date\n"
                       "/week — bookings for 7 days\n"
                       "/all — all upcoming bookings\n"
-                      "/stats — 30-day statistics\n"
+                      "/find — find a client (name, @username or phone)\n"
+                      "/stats — statistics and revenue for 30 days (/stats 7 — for 7)\n"
+                      "/export — export bookings to Excel\n"
                       "/block — block time (day off, vacation, phone booking)\n"
                       "/blocks — list of blocked time\n"
                       "/pause — turn AI off: all client messages go to you\n"
@@ -830,16 +949,67 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_reply_sent": "✅ Sent: {client}",
         "adm_reply_failed": "⚠️ Couldn't send — the client may have blocked the bot.",
         "adm_resumed": "▶️ AI is answering again: {client}",
-        "adm_day_header": "📅 <b>{day}</b> — bookings: {count}",
-        "adm_day_empty": "📅 <b>{day}</b> — no bookings.",
-        "adm_legend": "\n\n🚫 — client didn't show up · 🗑 — cancel booking",
+        "adm_day_header": "📅 <b>{day}</b>{master} — bookings: {count}",
+        "adm_day_empty": "📅 <b>{day}</b>{master} — no bookings.",
         "adm_item": "\n\n<b>{n}. {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}{flags}",
         "adm_list_day": "\n\n📅 <b>{day}</b> — bookings: {count}",
-        "adm_list_hint": "\n\nTo cancel a booking, tap the button with its number 👇",
+        "adm_list_hint": "\n\nTap a booking to reschedule, cancel or mark the payment 👇",
+        "adm_day_master": " · {name}",
+        "adm_day_hint": "\n\nTap a booking to reschedule, cancel, mark a no-show or the payment 👇",
+        "adm_day_pick": "📅 Choose a day:",
+        "adm_day_usage": "📅 Give a date, e.g. /day 30.10 or /day tomorrow",
+        "btn_adm_booking_item": "⚙️ {n} · {when} · {client}",
+        "btn_day_prev": "◀️ {day}",
+        "btn_day_next": "{day} ▶️",
+        "btn_day_pick": "📅 Date",
+        "btn_master_all": "👥 All",
+        "btn_master_selected": "✅ {name}",
+        "adm_card": "📋 <b>Booking #{id}</b>\n\n{summary}\n💰 {price}",
+        "adm_card_source_buttons": "\n📱 Booked by the client",
+        "adm_card_source_ai": "\n🤖 Booked via the AI chat",
+        "adm_card_source_admin": "\n📞 Booked by an admin",
+        "adm_card_noshow": "\n🚫 No-show",
+        "adm_card_cancelled": "\n❌ Cancelled — {by}",
+        "adm_card_confirmed": "\n✅ The client confirmed they'll come",
+        "btn_adm_resched": "🔁 Reschedule",
+        "btn_adm_cancel_short": "🗑 Cancel",
+        "btn_adm_noshow": "🚫 No-show",
+        "btn_adm_client": "👤 Client",
+        "btn_adm_write": "✉️ Message",
+        "adm_resched_day": "🔁 <b>Reschedule booking #{id}</b>\n\n{summary}\n\nChoose a new day 👇",
+        "adm_resched_none": "🔁 No free days to reschedule to.\n\n{summary}",
+        "adm_resched_time": "🔁 <b>#{id}</b> · {service} · {master}\n📅 {day} — choose a time 👇",
+        "adm_resched_confirm": "🔁 <b>Reschedule this booking?</b>\n\n💈 {service}\n👤 {client}\nWas: {old}\nWill be: <b>{new}</b>\n\n{who}",
+        "btn_adm_resched_yes": "✅ Reschedule",
+        "adm_resched_same": "That's the same time — nothing changed.",
+        "adm_resched_done": "🔁 <b>Rescheduled</b>\n\n{summary}\n\nWas: {old}\n{who}",
+        "adm_resched_notified": "The client has been notified.",
+        "adm_resched_offline": "The client isn't on Telegram — let them know yourself.",
+        "adm_find_usage": "🔎 Find a client: /find Ivan, /find @username or /find 0671 (part of the phone)",
+        "adm_find_none": "🔎 Nobody found for «{q}».",
+        "adm_find_many": "🔎 Found: {count}. Choose a client 👇",
+        "btn_adm_client_item": "👤 {label}",
+        "adm_client_card": "👤 <b>{name}</b>\n{contacts}\n{tg}\n\n📊 Visits: {done} · no-shows: {noshow} · cancellations: {cancelled}\n💰 Total: {spent}{last}{upcoming}{notes}",
+        "adm_client_tg_yes": "✉️ Uses the bot",
+        "adm_client_tg_no": "📵 Not on Telegram",
+        "adm_client_last": "\n🗓 Last visit: {day} · {service}",
+        "adm_client_upcoming": "\n\n<b>Upcoming:</b>{items}",
+        "adm_client_upcoming_item": "\n• {when} · {service}",
+        "adm_client_notes": "\n\n📝 {notes}",
+        "btn_adm_client_booking": "⚙️ {when} · {service}",
+        "btn_adm_client_book": "📞 Book",
+        "adm_export_usage": "📊 /export — bookings for 30 days and all upcoming; /export 90 — for 90 days.",
+        "adm_export_empty": "No bookings for this period.",
+        "adm_export_caption": "📊 Bookings since {start} (and all upcoming): {count}",
+        "adm_export_headers": "Date|Time|End|Master|Service|Price|Status|Client|Phone|Telegram|Source|Prepayment|Note|Created",
+        "adm_export_sheet": "Bookings",
+        "adm_export_statuses": "planned|done|no-show|cancelled",
+        "adm_export_sources": "client|AI chat|admin",
+        "adm_export_prepay": "awaiting|client says paid|paid",
+        "adm_master_revenue": "\n   {name}: {count} · {revenue}",
+        "adm_evening_report": "🌙 <b>Day summary · {day}</b>\n\n✅ Done: {done} · 🚫 no-shows: {noshow} · ❌ cancelled: {cancelled}\n💰 Revenue: <b>{revenue}</b>{by_master}\n\n📅 Bookings tomorrow: {tomorrow}",
+        "client_rescheduled_by_admin": "🔁 The admin rescheduled your booking:\n💈 {service} · {master}\nWas: {old}\nNow: <b>{new}</b>\n\nIf the time doesn't suit you, change it in «🗓 My bookings» or message us.",
         "adm_booking_summary": "<b>{day}, {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}",
-        "btn_adm_noshow_n": "🚫 {n} no-show",
-        "btn_adm_cancel_n": "🗑 {n} cancel",
-        "btn_adm_cancel_item": "🗑 {n} · {when} · {client}",
         "adm_noshow_done": "🚫 {client} ({time}) — no-show",
         "adm_cancel_ask": "Cancel this booking?\n\n{booking}\n\n{who}",
         "adm_cancel_notify": "The client will get a Telegram message.",
@@ -862,8 +1032,6 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_prepay_waiting": "\n💳 ⏳ awaiting prepayment",
         "adm_prepay_claimed": "\n💳 ❔ client says they've paid — please check",
         "adm_prepay_paid": "\n💳 ✅ prepayment received",
-        "btn_adm_prepay_n": "💳 {n} — payment received",
-        "btn_adm_prepay_item": "💳 {n} · payment received · {client}",
         "adm_cancelled_by_unpaid": "not paid",
         "adm_cancelled_unpaid": "⏰ <b>Booking cancelled automatically</b> — prepayment not confirmed within {hours} h.\n\n{booking}",
         "btn_adm_clear_cancelled": "🧹 Clear cancelled ({count})",
@@ -937,6 +1105,9 @@ TEXTS: dict[str, dict[str, str]] = {
                      "• at night (22:00–08:00): {night}\n"
                      "• completed: {done} · no-shows: {noshow} · cancelled: {cancelled}\n"
                      "• upcoming: {upcoming}\n\n"
+                     "<b>Revenue</b>\n"
+                     "• {revenue} · average check {avg_check}{by_master}\n"
+                     "• expected from upcoming bookings: {expected}\n\n"
                      "<b>Conversations</b>\n"
                      "• clients who wrote: {clients}\n"
                      "• handed over to you: {handoffs}\n"
@@ -952,6 +1123,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_today": "Today's bookings",
         "cmd_tomorrow": "Tomorrow's bookings",
         "cmd_book": "Book a client",
+        "cmd_day": "Bookings for a date",
+        "cmd_find": "Find a client",
+        "cmd_export": "Export to Excel",
         "cmd_week": "Bookings for 7 days",
         "cmd_all": "All upcoming bookings",
         "cmd_stats": "Statistics",

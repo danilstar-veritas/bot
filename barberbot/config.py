@@ -367,6 +367,7 @@ class Tenant:
     prepay_recipient: str = ""
     prepay_hours: int = 2
     max_per_week: int = 0  # скільки записів один клієнт може мати на календарний тиждень (0 — без обмеження)
+    report_at: time | None = None  # коли надсилати власнику вечірній підсумок дня (None — не надсилати)
 
     @property
     def prepay_enabled(self) -> bool:
@@ -592,6 +593,11 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         digest_at = parse_hhmm(digest_raw) if digest_raw else None
     except ValueError:
         raise ConfigError(f"{where} → [notifications] → digest_at: час у форматі \"09:00\" або \"\".") from None
+    report_raw = n.str("report_at", "21:00")
+    try:
+        report_at = parse_hhmm(report_raw) if report_raw else None
+    except ValueError:
+        raise ConfigError(f"{where} → [notifications] → report_at: час у форматі \"21:00\" або \"\".") from None
 
     pp = s.section("prepayment")
     prepay_on = pp.bool("enabled", False)
@@ -744,6 +750,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         prepay_recipient=pp.str("recipient") if prepay_on else "",
         prepay_hours=pp.int("pay_within_hours", 2, 1, 72),
         max_per_week=b.int("max_per_week_per_client", 0, 0, 100),
+        report_at=report_at,
     )
 
 

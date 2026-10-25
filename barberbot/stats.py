@@ -3,10 +3,23 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 
 from .config import Settings, Tenant, fmt_num
 from .db import DB, dt_str, parse_dt
+from .texts import Raw
+
+
+def _by_master(tenant: Tenant, done: list) -> str:
+    """Рядки «майстер: N візитів · сума» — від найбільшої виручки."""
+    per: dict[str, list[float]] = {}
+    for r in done:
+        item = per.setdefault(r["master_name"], [0, 0.0])
+        item[0] += 1
+        item[1] += r["price"] or 0
+    return "".join(tenant.t(tenant.lang, "adm_master_revenue", name=name, count=count,
+                            revenue=tenant.price_str(round(rev)))
+                   for name, (count, rev) in sorted(per.items(), key=lambda kv: -kv[1][1]))
 
 
 def compute_stats(db: DB, tenant: Tenant, settings: Settings, days: int = 30) -> dict:
@@ -29,7 +42,11 @@ def compute_stats(db: DB, tenant: Tenant, settings: Settings, days: int = 30) ->
         """SELECT b.*, c.tg_id FROM bookings b JOIN clients c ON c.id = b.client_id
            WHERE b.tenant = ? AND b.start_at >= ?""", slug, dt_str(since))
         if r["tg_id"] not in admins]
-    done = sum(1 for r in visits if r["status"] == "active" and parse_dt(r["end_at"]) <= now)
+    done_rows = [r for r in visits if r["status"] == "active" and parse_dt(r["end_at"]) <= now]
+    done = len(done_rows)
+    revenue = sum(r["price"] or 0 for r in done_rows)
+    expected = db.scalar("SELECT SUM(price) FROM bookings WHERE tenant = ? AND status = 'active' AND start_at > ?",
+                         slug, dt_str(now))
     noshow = sum(1 for r in visits if r["status"] == "no_show")
     upcoming = db.scalar("SELECT COUNT(*) FROM bookings WHERE tenant = ? AND status = 'active' AND start_at > ?",
                          slug, dt_str(now))
@@ -57,10 +74,32 @@ def compute_stats(db: DB, tenant: Tenant, settings: Settings, days: int = 30) ->
         "days": days,
         "created": len(created), "by_ai": by_ai, "by_buttons": by_buttons, "by_admin": by_admin, "night": night,
         "done": done, "noshow": noshow, "cancelled": cancelled, "upcoming": upcoming,
+        "revenue": tenant.price_str(round(revenue)),
+        "avg_check": tenant.price_str(round(revenue / done)) if done else "—",
+        "by_master": Raw(_by_master(tenant, done_rows)),
+        "expected": tenant.price_str(round(expected)),
         "clients": len(wrote), "handoffs": handoffs, "auto_rate": auto_rate,
         "reminders": db.count_events(slug, "reminder_sent", since),
         "confirmed": db.count_events(slug, "reminder_confirmed", since),
         "ai_calls": db.count_events(slug, "ai_message", since),
         "tokens": fmt_num(sum(tokens.values())),
         "cost": f"{cost:.2f}",
+    }
+
+
+def day_report(db: DB, tenant: Tenant, day: date) -> dict:
+    """Підсумок дня для вечірнього звіту власнику."""
+    start = datetime.combine(day, time.min)
+    rows = db.bookings_between(tenant.slug, start, start + timedelta(days=1), ("active", "no_show", "cancelled"))
+    now = tenant.now()
+    done = [r for r in rows if r["status"] == "active" and parse_dt(r["end_at"]) <= now]
+    tomorrow = db.bookings_between(tenant.slug, start + timedelta(days=1), start + timedelta(days=2), ("active",))
+    return {
+        "day": tenant.day_label(day, tenant.lang),
+        "done": len(done),
+        "noshow": sum(1 for r in rows if r["status"] == "no_show"),
+        "cancelled": sum(1 for r in rows if r["status"] == "cancelled"),
+        "revenue": tenant.price_str(round(sum(r["price"] or 0 for r in done))),
+        "by_master": Raw(_by_master(tenant, done)),
+        "tomorrow": len(tomorrow),
     }

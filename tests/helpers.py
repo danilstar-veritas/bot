@@ -150,6 +150,13 @@ class FakeTelegram:
             return []
         return True
 
+    async def send_document(self, chat_id: int, filename: str, content: bytes, caption: str | None = None,
+                            mime: str = "application/octet-stream"):
+        self.calls.append(("sendDocument", {"chat_id": chat_id, "filename": filename, "content": content,
+                                            "caption": caption, "mime": mime}))
+        self.next_id += 1
+        return {"message_id": self.next_id}
+
     def of(self, method: str, chat_id: int | None = None) -> list[dict]:
         return [p for m, p in self.calls if m == method and (chat_id is None or p.get("chat_id") == chat_id)]
 

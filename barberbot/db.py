@@ -236,6 +236,28 @@ class DB:
             self.conn.execute(f"DELETE FROM clients WHERE id IN ({marks})", dupes)
         return moved
 
+    def search_clients(self, tenant: str, query: str, limit: int = 15) -> list[sqlite3.Row]:
+        """Клієнти за частиною імені, @username або номера (від 4 цифр). Спершу ті, хто писав нещодавно."""
+        q = query.strip().lstrip("@").casefold()
+        digits = re.sub(r"\D", "", query)
+        rows = self.q("SELECT * FROM clients WHERE tenant = ? ORDER BY last_seen_at DESC, id DESC", tenant)
+        found = []
+        for r in rows:
+            if len(digits) >= 4:
+                hit = digits in re.sub(r"\D", "", r["phone"] or "")
+            else:
+                names = (r["name"], r["first_name"], r["last_name"], r["username"],
+                         f"{r['first_name'] or ''} {r['last_name'] or ''}")
+                hit = bool(q) and any(q in (n or "").casefold() for n in names)
+            if hit:
+                found.append(r)
+                if len(found) >= limit:
+                    break
+        return found
+
+    def client_bookings(self, client_id: int) -> list[sqlite3.Row]:
+        return self.q("SELECT * FROM bookings WHERE client_id = ? ORDER BY start_at", client_id)
+
     def create_offline_client(self, tenant: str, name: str, phone: str | None, now: datetime) -> sqlite3.Row:
         """Клієнт без Telegram (записаний адміністратором). tg_id від'ємний — йому нічого не надсилаємо."""
         tg_id = min(self.scalar("SELECT MIN(tg_id) FROM clients WHERE tenant = ?", tenant), 0) - 1

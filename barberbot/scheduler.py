@@ -10,6 +10,7 @@ from .agent import add_note
 from .booking import BookingError
 from .config import fmt_hhmm
 from .db import parse_dt
+from .stats import day_report
 from .telegram import ibtn, inline_kb
 from .texts import Raw
 
@@ -41,6 +42,7 @@ class Scheduler:
                 await self.reminders(slug)
                 await self.nudges(slug)
                 await self.digest(slug)
+                await self.evening_report(slug)
             except Exception:
                 log.exception("Помилка планувальника для %s", slug)
 
@@ -158,3 +160,16 @@ class Scheduler:
         body = app.render_day(tenant, now.date(), rows)
         for admin in tenant.admins:
             await app.send(tenant, admin, tenant.t(tenant.lang, "adm_digest", body=Raw(body)))
+
+    # ---------------------------------------------------------------- вечірній підсумок
+    async def evening_report(self, slug: str) -> None:
+        app = self.app
+        tenant, db = app.tenants[slug], app.db
+        if tenant.report_at is None or not tenant.admins:
+            return
+        now = tenant.now()
+        today = now.date().isoformat()
+        if not in_window(now, tenant.report_at, hours=3) or db.kv_get(slug, "report_date") == today:
+            return
+        db.kv_set(slug, "report_date", today)
+        await app.notify_admins(tenant, tenant.t(tenant.lang, "adm_evening_report", **day_report(db, tenant, now.date())))

@@ -11,6 +11,7 @@ import ssl
 import threading
 import time
 import urllib.parse
+import uuid
 
 log = logging.getLogger("barberbot.telegram")
 
@@ -212,10 +213,30 @@ class TelegramAPI:
         self.base_url = base_url.rstrip("/")
 
     def call_sync(self, method: str, params: dict | None = None, timeout: float = 30) -> object:
-        url = f"{self.base_url}/bot{self.token}/{method}"
         data = json.dumps(params or {}, ensure_ascii=False).encode("utf-8")
+        return self._post(method, data, "application/json", timeout)
+
+    def upload_sync(self, method: str, fields: dict, file_field: str, filename: str, content: bytes,
+                    mime: str = "application/octet-stream", timeout: float = 60) -> object:
+        """Надіслати файл (multipart/form-data), наприклад sendDocument."""
+        boundary = f"----barberbot{uuid.uuid4().hex}"
+        parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode("utf-8")
+                 for k, v in fields.items() if v is not None]
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{file_field}"; filename="{filename}"'
+                     f'\r\nContent-Type: {mime}\r\n\r\n'.encode("utf-8") + content + b"\r\n")
+        parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+        return self._post(method, b"".join(parts), f"multipart/form-data; boundary={boundary}", timeout)
+
+    async def send_document(self, chat_id: int, filename: str, content: bytes, caption: str | None = None,
+                            mime: str = "application/octet-stream") -> object:
+        return await run_blocking(self.upload_sync, "sendDocument",
+                                  {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML" if caption else None},
+                                  "document", filename, content, mime)
+
+    def _post(self, method: str, data: bytes, content_type: str, timeout: float) -> object:
+        url = f"{self.base_url}/bot{self.token}/{method}"
         try:
-            status, raw, _ = POOL.post(url, data, {"Content-Type": "application/json"}, timeout)
+            status, raw, _ = POOL.post(url, data, {"Content-Type": content_type}, timeout)
         except NET_ERRORS as e:
             if is_ssl_error(e):
                 raise NetworkError(SSL_HINT) from None

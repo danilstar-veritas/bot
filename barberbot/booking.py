@@ -222,7 +222,8 @@ class BookingService:
         return self.db.get_booking(b["id"])
 
     def validate_reschedule(self, booking_id: int, start: datetime, master_sel: str | None,
-                            client_id: int | None) -> tuple[sqlite3.Row, str]:
+                            client_id: int | None, admin: bool = False) -> tuple[sqlite3.Row, str]:
+        """client_id=None — переносить адміністратор; admin=True — ще й без мінімального часу до початку."""
         b = self._own_active(booking_id, client_id)
         if client_id is not None:
             self._check_late(b)
@@ -230,8 +231,8 @@ class BookingService:
         self.service(b["service_id"])
         if master_sel in (None, ""):
             master_sel = b["master_id"] if b["master_id"] in self.tenant.masters else "any"
-        self._check_window(start)
-        resolved = self.resolve_master(b["service_id"], master_sel, start, exclude_id=b["id"])
+        self._check_window(start, admin)
+        resolved = self.resolve_master(b["service_id"], master_sel, start, exclude_id=b["id"], admin=admin)
         if resolved is None:
             raise BookingError("slot_taken")
         if resolved == b["master_id"] and start == parse_dt(b["start_at"]):
@@ -239,9 +240,9 @@ class BookingService:
         return b, resolved
 
     def reschedule(self, booking_id: int, start: datetime, master_sel: str | None,
-                   client_id: int | None) -> tuple[sqlite3.Row, sqlite3.Row]:
+                   client_id: int | None, admin: bool = False) -> tuple[sqlite3.Row, sqlite3.Row]:
         """Повертає (старий запис, оновлений запис)."""
-        old, master_id = self.validate_reschedule(booking_id, start, master_sel, client_id)
+        old, master_id = self.validate_reschedule(booking_id, start, master_sel, client_id, admin)
         service = self.service(old["service_id"])
         master = self.master(master_id)
         now = self.tenant.now()

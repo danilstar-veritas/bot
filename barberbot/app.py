@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta
 
 from . import clock
+from .admin_panel import AdminPanel
 from .agent import Agent, add_note, history_transcript
 from .booking import BookingError, BookingService
 from .config import RANGE_RE, ConfigError, Settings, Tenant, fmt_hhmm, load_tenant, parse_hhmm, parse_user_date
@@ -24,17 +25,14 @@ from .stats import compute_stats
 from .telegram import NetworkError, TelegramAPI, TelegramError, chunk_text, ibtn, inline_kb, reply_kb, url_btn
 from .texts import Raw
 from .util import is_affirmative, normalize_phone, short
+from .ui import Expired, _d, _int, _rows, _t
 
 log = logging.getLogger("barberbot")
 
-ADMIN_COMMANDS = ["start", "admin", "book", "today", "tomorrow", "week", "all", "stats", "block", "blocks", "pause", "resume",
-                  "reload", "myid"]
+ADMIN_COMMANDS = ["start", "admin", "book", "today", "tomorrow", "day", "week", "all", "find", "stats", "export",
+                  "block", "blocks", "pause", "resume", "reload", "myid"]
 PENDING_TTL = timedelta(minutes=30)
 POLL_TIMEOUT = 25
-
-
-class Expired(Exception):
-    """Кнопка застаріла або містить неправильні дані."""
 
 
 class StateStore:
@@ -88,31 +86,6 @@ def parse_client_info(text: str) -> tuple[str, str | None, str]:
             lines.append(line)
     name = lines[0] if lines else ""
     return short(name, 60), phone, short("; ".join(lines[1:]), 300)
-
-
-def _d(value: str) -> date:
-    try:
-        return datetime.strptime(value, "%Y%m%d").date()
-    except (ValueError, TypeError):
-        raise Expired() from None
-
-
-def _t(value: str) -> time:
-    try:
-        return datetime.strptime(value, "%H%M").time()
-    except (ValueError, TypeError):
-        raise Expired() from None
-
-
-def _int(value: str) -> int:
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        raise Expired() from None
-
-
-def _rows(buttons: list[dict], per_row: int) -> list[list[dict]]:
-    return [buttons[i:i + per_row] for i in range(0, len(buttons), per_row)]
 
 
 def strip_html(text: str) -> str:
@@ -187,7 +160,7 @@ class Ctx:
             pass
 
 
-class BotApp:
+class BotApp(AdminPanel):
     def __init__(self, settings: Settings, tenants: list[Tenant], db: DB, llm=None, api_factory=None):
         self.settings = settings
         self.db = db
@@ -1379,6 +1352,16 @@ class BotApp:
             await ctx.send(ctx.at("admin_help", name=tenant.name, ai_status=ctx.at(f"ai_status_{self.ai_status(tenant)}")))
         elif cmd in ("today", "tomorrow"):
             await self.admin_day(ctx, today if cmd == "today" else today + timedelta(days=1), None)
+        elif cmd == "day":
+            day = parse_user_date(args, today) if args else None
+            if day is None:
+                await ctx.send(ctx.at("adm_day_usage"))
+            else:
+                await self.admin_day(ctx, day, None)
+        elif cmd == "find":
+            await self.admin_find(ctx, args)
+        elif cmd == "export":
+            await self.admin_export(ctx, args)
         elif cmd == "book":
             await self.admin_book_services(ctx, None)
         elif cmd == "week":
@@ -1389,7 +1372,8 @@ class BotApp:
             clear = [[ibtn(ctx.at("btn_adm_clear_cancelled", count=cancelled), "aCc")]] if cancelled else []
             await self.send_list(ctx, text, numbered, clear)
         elif cmd == "stats":
-            await ctx.send(ctx.at("adm_stats", **compute_stats(ctx.db, tenant, self.settings)))
+            days = int(args) if args.isdigit() and 0 < int(args) <= 3650 else 30
+            await ctx.send(ctx.at("adm_stats", **compute_stats(ctx.db, tenant, self.settings, days)))
         elif cmd == "block":
             await self.admin_block(ctx, args)
         elif cmd == "blocks":
@@ -1446,31 +1430,17 @@ class BotApp:
                         client=self.client_label(tenant, client) if client else tenant.t(tenant.lang,
                                                                                         "adm_client_noname"))
 
-    def render_day(self, tenant: Tenant, day: date, rows) -> str:
+    def render_day(self, tenant: Tenant, day: date, rows, master: str = "") -> str:
         lang = tenant.lang
         label = tenant.day_label(day, lang)
+        who = tenant.t(lang, "adm_day_master", name=master) if master else ""
         if not rows:
-            return tenant.t(lang, "adm_day_empty", day=label)
+            return tenant.t(lang, "adm_day_empty", day=label, master=Raw(who))
         active = [r for r in rows if r["status"] == "active"]
-        text = tenant.t(lang, "adm_day_header", day=label, count=len(active))
+        text = tenant.t(lang, "adm_day_header", day=label, master=Raw(who), count=len(active))
         for n, r in enumerate(rows, 1):
             text += self._item(tenant, n, r)
         return text
-
-    async def admin_day(self, ctx: Ctx, day: date, message_id: int | None) -> None:
-        rows = ctx.booking.day_bookings(day)
-        text = self.render_day(ctx.tenant, day, rows)
-        now = dt_str(ctx.tenant.now())
-        buttons = []
-        for n, r in enumerate(rows, 1):
-            if r["status"] == "active" and r["prepay"] in ("waiting", "claimed"):
-                buttons.append([ibtn(ctx.at("btn_adm_prepay_n", n=n), f"aPy:{r['id']}")])
-            if r["status"] == "active" and r["start_at"] > now:
-                buttons.append([ibtn(ctx.at("btn_adm_noshow_n", n=n), f"ans:{r['id']}"),
-                                ibtn(ctx.at("btn_adm_cancel_n", n=n), f"acx:{r['id']}")])
-        if buttons:
-            text += ctx.at("adm_legend")
-        await ctx.show(message_id, text, inline_kb(buttons) if buttons else None)
 
     def _active_from(self, tenant: Tenant, start_day: date, days: int | None = None,
                      statuses: tuple[str, ...] = ("active",)):
@@ -1533,15 +1503,12 @@ class BotApp:
         now = dt_str(tenant.now())
         rows = []
         for n, r in numbered:
-            if r["status"] != "active" or r["start_at"] <= now:
+            if r["status"] != "active":
                 continue
             when = f"{tenant.weekday_short(date.fromisoformat(r['start_at'][:10]), tenant.lang)} " \
                    f"{r['start_at'][8:10]}.{r['start_at'][5:7]} {r['start_at'][11:16]}"
-            if r["prepay"] in ("waiting", "claimed"):
-                rows.append([ibtn(ctx.at("btn_adm_prepay_item", n=n, client=self._short_name(tenant, r)),
-                                  f"aPy:{r['id']}")])
-            rows.append([ibtn(ctx.at("btn_adm_cancel_item", n=n, when=when, client=self._short_name(tenant, r)),
-                              f"acx:{r['id']}")])
+            rows.append([ibtn(ctx.at("btn_adm_booking_item", n=n, when=when, client=self._short_name(tenant, r)),
+                              f"aK:{r['id']}")])
         if rows:
             text += ctx.at("adm_list_hint")
         rows = rows[:90] + (extra_rows or [])
@@ -1612,7 +1579,7 @@ class BotApp:
             return
         # Якщо адмін уже вводив дані клієнта (а час потім зайняли) — не просимо ще раз.
         prev = self.states.get(ctx.key, ("", {}))
-        carried = {k: v for k, v in prev[1].items() if k in ("name", "phone", "note", "tg_id")} \
+        carried = {k: v for k, v in prev[1].items() if k in ("name", "phone", "note", "tg_id", "client_id")} \
             if prev[0] == "admin_book_client" else {}
         data = {"service_id": service_id, "master_id": master_id, "start": f"{start:%Y%m%d%H%M}", **carried}
         self.states[ctx.key] = ("admin_book_client", data)
@@ -1637,10 +1604,15 @@ class BotApp:
             await ctx.send(ctx.at("adm_book_need_name"))
             return
         data.update(name=name, phone=phone, note=note, tg_id=tg_id)
+        data.pop("client_id", None)  # вписали дані вручну — шукаємо клієнта за ними, а не того, з чиєї картки почали
         self.states[ctx.key] = ("admin_book_client", data)
         await self.admin_book_card(ctx, data, None)
 
     def _find_book_client(self, ctx: Ctx, data: dict):
+        if data.get("client_id"):  # «📞 Записати» з картки клієнта
+            client = ctx.db.get_client(data["client_id"])
+            if client is not None and client["tenant"] == ctx.tenant.slug:
+                return client
         if data.get("tg_id"):
             return ctx.db.get_client_by_tg(ctx.tenant.slug, data["tg_id"])
         if data.get("phone"):
@@ -1841,9 +1813,29 @@ class BotApp:
                 b = ctx.booking.mark_no_show(_int(a[0]))
             except BookingError:
                 raise Expired() from None
-            await self.admin_day(ctx, parse_dt(b["start_at"]).date(), message_id)
+            await self.admin_booking_card(ctx, b["id"], message_id)
             return ctx.at("adm_noshow_done", client=self._short_name(tenant, ctx.db.get_client(b["client_id"])),
                           time=b["start_at"][11:16])
+        elif op == "aK" and len(a) == 1:
+            await self.admin_booking_card(ctx, _int(a[0]), None)  # нове повідомлення — список лишається
+        elif op == "aKe" and len(a) == 1:
+            await self.admin_booking_card(ctx, _int(a[0]), message_id)
+        elif op == "aD" and len(a) == 2:
+            await self.admin_day(ctx, _d(a[0]), message_id, a[1])
+        elif op == "aDp" and len(a) == 1:
+            await self.admin_day_picker(ctx, a[0], message_id)
+        elif op == "aRs" and len(a) == 1:
+            await self.admin_resched_days(ctx, _int(a[0]), message_id)
+        elif op == "aRd" and len(a) == 2:
+            await self.admin_resched_times(ctx, _int(a[0]), _d(a[1]), message_id)
+        elif op == "aRt" and len(a) == 3:
+            await self.admin_resched_confirm(ctx, _int(a[0]), datetime.combine(_d(a[1]), _t(a[2])), message_id)
+        elif op == "aRy" and len(a) == 3:
+            await self.admin_resched_do(ctx, _int(a[0]), datetime.combine(_d(a[1]), _t(a[2])), message_id)
+        elif op == "aC" and len(a) == 1:
+            await self.admin_client_card(ctx, _int(a[0]), None)
+        elif op == "aCb" and len(a) == 1:
+            await self.admin_book_for_client(ctx, _int(a[0]))
         elif op == "acx" and len(a) == 1:
             b = ctx.db.get_booking(_int(a[0]))
             if b is None or b["tenant"] != tenant.slug or b["status"] != "active":

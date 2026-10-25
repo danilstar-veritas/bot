@@ -393,7 +393,9 @@ class AdminTests(BotTestCase):
         today = self.tg.last(ADMIN_ID)
         self.assertIn("12:00–13:00", today["text"])
         self.assertIn("🤖", today["text"])
-        self.assertEqual([x["callback_data"] for x in self.tg.buttons(today)], [f"ans:{b1['id']}", f"acx:{b1['id']}"])
+        self.assertEqual([x["callback_data"] for x in self.tg.buttons(today)][0], f"aK:{b1['id']}")
+        await self.send(cb(f"aK:{b1['id']}", uid=ADMIN_ID))
+        self.assertIn(f"ans:{b1['id']}", [x["callback_data"] for x in self.tg.buttons(self.tg.last(ADMIN_ID))])
         await self.send(msg(uid=ADMIN_ID, text="/tomorrow"))
         self.assertIn("записів немає", self.tg.last(ADMIN_ID)["text"])
         await self.send(msg(uid=ADMIN_ID, text="/week"))
@@ -678,7 +680,9 @@ class AdminBookingTests(BotTestCase):
         b = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 11, 6, 12, 0), "buttons")
         await self.send(msg(uid=ADMIN_ID, text="/all"))
         upcoming = self.tg.last(ADMIN_ID)
-        self.assertIn(f"acx:{b['id']}", [x["callback_data"] for x in self.tg.buttons(upcoming)])
+        self.assertIn(f"aK:{b['id']}", [x["callback_data"] for x in self.tg.buttons(upcoming)])
+        await self.send(cb(f"aK:{b['id']}", uid=ADMIN_ID))  # картка запису
+        self.assertIn(f"acx:{b['id']}", [x["callback_data"] for x in self.tg.buttons(self.tg.last(ADMIN_ID))])
         await self.send(cb(f"acx:{b['id']}", uid=ADMIN_ID))
         await self.send(cb(f"acy:{b['id']}", uid=ADMIN_ID))
         self.assertEqual(self.db.get_booking(b["id"])["status"], "cancelled")
@@ -928,8 +932,8 @@ class AdminListTests(BotTestCase):
         self.assertLess(text.index("<b>1. 12:00–13:00</b>"), text.index("<b>2. 14:00–15:00</b>"))
         self.assertLess(text.index("👤 Олена"), text.index("❌ <b>Скасовані</b>"))
         self.assertEqual(self.buttons(), [
-            ("🗑 1 · вт 27.10 12:00 · Іван", f"acx:{self.b1['id']}"),
-            ("🗑 2 · вт 27.10 14:00 · Олена", f"acx:{self.b2['id']}"),
+            ("⚙️ 1 · вт 27.10 12:00 · Іван", f"aK:{self.b1['id']}"),
+            ("⚙️ 2 · вт 27.10 14:00 · Олена", f"aK:{self.b2['id']}"),
             ("🧹 Прибрати скасовані (1)", "aCc"),
         ])
 
@@ -939,10 +943,8 @@ class AdminListTests(BotTestCase):
         text = self.tg.last(ADMIN_ID)["text"]
         self.assertIn("<b>1. 12:00–13:00</b>", text)
         self.assertIn("<b>2. 14:00–15:00</b>", text)
-        self.assertEqual(self.buttons(), [
-            ("🚫 1 не прийшов", f"ans:{self.b1['id']}"), ("🗑 1 скасувати", f"acx:{self.b1['id']}"),
-            ("🚫 2 не прийшов", f"ans:{self.b2['id']}"), ("🗑 2 скасувати", f"acx:{self.b2['id']}"),
-        ])
+        self.assertEqual(self.buttons()[:2], [("⚙️ 1 · 12:00 · Іван", f"aK:{self.b1['id']}"),
+                                              ("⚙️ 2 · 14:00 · Олена", f"aK:{self.b2['id']}")])
 
     async def test_cancel_offline_client_is_explained_upfront(self):
         await self.send(cb(f"acx:{self.b2['id']}", uid=ADMIN_ID))
@@ -1110,10 +1112,10 @@ class PrepayTests(BotTestCase):
         self.assertIn(("✅ Я оплатив(ла) 27.10 12:00", f"pp:{b['id']}"), self.kb(CLIENT_ID))
         await self.send(msg(uid=ADMIN_ID, text="/all"))
         self.assertIn("💳 ⏳ чекаємо передоплату", self.tg.last(ADMIN_ID)["text"])
-        self.assertIn(("💳 1 · оплату отримано · Іван", f"aPy:{b['id']}"), self.kb(ADMIN_ID))
-        set_time(2026, 10, 27, 9, 0)
-        await self.send(msg(uid=ADMIN_ID, text="/today"))
-        self.assertIn(("💳 1 — оплату отримано", f"aPy:{b['id']}"), self.kb(ADMIN_ID))
+        self.assertIn(("⚙️ 1 · вт 27.10 12:00 · Іван", f"aK:{b['id']}"), self.kb(ADMIN_ID))
+        await self.send(cb(f"aK:{b['id']}", uid=ADMIN_ID))  # у картці — статус і кнопка оплати
+        self.assertIn("💳 ⏳ чекаємо передоплату", self.tg.last(ADMIN_ID)["text"])
+        self.assertIn(("✅ Оплату отримано", f"aPy:{b['id']}"), self.kb(ADMIN_ID))
 
     async def test_admin_booking_needs_no_prepay_and_contacts_mention_it(self):
         b = self.booking.create(self.client()["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "admin")
