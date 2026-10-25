@@ -298,6 +298,7 @@ class Service:
     description: str = ""
     group: str = ""  # розділ у списку послуг, наприклад «👨 Чоловічі»
     icon: str = ""  # смайлик перед назвою у списках послуг і цін (у самих записах назва — без нього)
+    short: str = ""  # коротка назва для списків під заголовком розділу («Коротке волосся» замість повної)
     addon_for: list[str] = field(default_factory=list)  # до яких послуг цю можна додати
     # Прихована комбінація «послуга + додаток»: у списках не показується, записатися — лише через «➕ Додати».
     hidden: bool = False
@@ -306,8 +307,9 @@ class Service:
 
     @property
     def label(self) -> str:
-        """Назва для списків: зі смайликом, якщо він заданий."""
-        return f"{self.icon} {self.title}" if self.icon else self.title
+        """Назва для списків: коротка (якщо задана) і зі смайликом (якщо заданий)."""
+        name = self.short or self.title
+        return f"{self.icon} {name}" if self.icon else name
 
 
 @dataclass
@@ -612,6 +614,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
             description=ss.str("description"),
             group=ss.str("group"),
             icon=ss.str("icon"),
+            short=ss.str("short"),
             addon_for=[str(x) for x in ss.list("addon_for")],
             hidden=ss.bool("addon_only", False),  # лише додатком до іншої послуги, окремо не записують
         )

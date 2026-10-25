@@ -759,17 +759,15 @@ class AddonTests(BotTestCase):
     async def test_category_first_then_services(self):
         await self.send(msg(text="📅 Записатися"))
         first = self.tg.last(CLIENT_ID)["text"]
-        self.assertTrue(first.endswith("Оберіть категорію 👇"))
-        # Під кожною категорією — що в неї входить (довгі рядки розтягують вікно, і кнопки не обрізаються).
-        self.assertIn("<b>👦 Хлопчики (до 8 років)</b>\nМаленький джентльмен, Бешкетник під машинку", first)
+        # Одне речення над кнопками: без переліків, що дублюють кнопки, але достатньо довге, щоб вікно було широким.
+        self.assertEqual(first, "✨ Оберіть категорію — а далі підберемо майстра й зручний для вас час 👇")
         self.assertEqual(self.kb(), [("👨 Чоловічі", "bg:0"), ("👩 Жіночі", "bg:1"),
                                      ("👦 Хлопчики (до 8 років)", "bg:2"), ("👧 Дівчатка (до 8 років)", "bg:3")])
 
         await self.send(cb("bg:2"))
         boys = self.tg.last(CLIENT_ID)["text"]
-        self.assertTrue(boys.startswith("<b>👦 Хлопчики (до 8 років)</b>\n\n<b>👦 Маленький джентльмен</b> — 400 грн, 45 хв"))
-        self.assertIn("<i>Дитяча стрижка машинкою для хлопчиків до 8 років.</i>", boys)
-        self.assertTrue(boys.endswith("Оберіть послугу 👇"))
+        self.assertEqual(boys, "<b>👦 Хлопчики (до 8 років)</b>\n"
+                               "Оберіть послугу — а далі підберемо майстра й зручний для вас час 👇")
         self.assertEqual(self.kb(), [("👦 Маленький джентльмен · 400 грн", "bs:kids_boy"),
                                      ("🪒 Бешкетник під машинку · 250 грн", "bs:kids_buzz"), ("⬅️ Назад", "bs")])
         await self.send(cb("bg:3"))
@@ -784,15 +782,22 @@ class AddonTests(BotTestCase):
                                                      "bg:3"])
 
         await self.send(cb("bg:1"))
-        women = [d for _, d in self.kb()]
+        women = self.kb()
         self.assertEqual(len(women), 7)  # 6 послуг + «Назад»
-        self.assertNotIn("bs:haircut", women)
+        self.assertNotIn("bs:haircut", [d for _, d in women])
+        # Під «👩 Жіночі» — короткі назви, без повторення «Жіноча стрижка».
+        self.assertEqual(women[0], ("💇‍♀️ Коротке волосся · 700 грн", "bs:women_short"))
+        self.assertFalse([t for t, _ in women if "Жіноча" in t])
 
-        # «Назад» з вибору майстра веде до розділу послуги, а з розділу — до категорій.
+        # Деталі послуги — на кроці вибору майстра, з повною назвою.
         await self.send(cb("bs:women_long"))
+        master = self.tg.last(CLIENT_ID)["text"]
+        self.assertTrue(master.startswith("💈 <b>Жіноча стрижка (довге волосся)</b>\n💰 950 грн · ⏱ 90 хв\n"
+                                          "<i>Волосся нижче плечей. Укладання входить у вартість.</i>"))
+        # «Назад» з вибору майстра веде до розділу послуги, а з розділу — до категорій.
         self.assertEqual(self.kb()[-1], ("⬅️ Назад", "bg:1"))
         await self.send(cb("bs"))
-        self.assertTrue(self.tg.last(CLIENT_ID)["text"].endswith("Оберіть категорію 👇"))
+        self.assertTrue(self.tg.last(CLIENT_ID)["text"].startswith("✨ Оберіть категорію"))
 
     async def test_stale_category_button(self):
         await self.send(cb("bg:7"))
@@ -811,7 +816,8 @@ class AddonTests(BotTestCase):
         self.assertLess(boys, text.index("Бешкетник під машинку"))
         self.assertLess(text.index("Бешкетник під машинку"), girls)
         self.assertLess(girls, text.index("Довгокоса принцеса"))
-        self.assertIn("Дитяча стрижка на довге волосся для дівчаток до 8 років.", text)
+        self.assertIn("<b>👑 Довгокоса принцеса</b> — 550 грн\n⏱ 60 хв\nНа довге волосся.", text)
+        self.assertIn("<b>💇‍♀️ Коротке волосся</b> — 700 грн", text)  # коротка назва під заголовком розділу
         self.assertEqual(text.count("━━━━━━━━━━━━"), 4)
 
     async def test_icons_only_in_lists(self):

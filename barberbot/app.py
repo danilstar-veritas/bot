@@ -843,29 +843,13 @@ class BotApp:
         rows = [[ibtn(g, f"{group_prefix}:{i}")] for i, (g, _) in enumerate(groups) if g]
         return True, rows + self._service_buttons(ctx, [s for g, ss in groups if not g for s in ss], prefix)
 
-    def group_menu(self, ctx: Ctx, index: int, prefix: str, back: str) -> tuple[str, str, list[list[dict]]]:
-        """Розділ: (назва, опис послуг для тексту повідомлення, кнопки послуг + «Назад»)."""
+    def group_menu(self, ctx: Ctx, index: int, prefix: str, back: str) -> tuple[str, list[list[dict]]]:
+        """Розділ: (назва, кнопки послуг + «Назад»)."""
         groups = ctx.tenant.service_groups()
         if not 0 <= index < len(groups) or not groups[index][0]:
             raise Expired()
         group, services = groups[index]
-        return group, self._services_text(ctx, services), \
-            self._service_buttons(ctx, services, prefix) + [[ibtn(ctx.t("btn_back"), back)]]
-
-    # Ширина кнопок у Telegram дорівнює ширині повідомлення над ними: короткий текст — вузькі кнопки
-    # з обрізаними підписами. Тому над кнопками — перелік послуг з описами (і довгі рядки розтягують вікно).
-    def _services_text(self, ctx: Ctx, services) -> str:
-        tenant = ctx.tenant
-        text = ""
-        for s in services:
-            text += ctx.t("svc_line", title=s.label, price=tenant.price_str(s.price), duration=s.duration)
-            if s.description:
-                text += ctx.t("svc_desc", description=s.description)
-        return text
-
-    def _groups_text(self, ctx: Ctx) -> str:
-        return "".join(ctx.t("group_line", group=g, services=", ".join(s.title for s in ss))
-                       for g, ss in ctx.tenant.service_groups() if g)
+        return group, self._service_buttons(ctx, services, prefix) + [[ibtn(ctx.t("btn_back"), back)]]
 
     def _group_back(self, ctx: Ctx, service_id: str, menu: str, group_prefix: str) -> str:
         """«Назад» від послуги: до її розділу, якщо розділи є, інакше — до списку послуг."""
@@ -877,14 +861,14 @@ class BotApp:
         return menu
 
     async def flow_services(self, ctx: Ctx, message_id: int | None) -> None:
+        # Текст над кнопками — одне довге речення: у Telegram кнопки такої ж ширини, як повідомлення над ними,
+        # і з коротким текстом їхні підписи обрізаються.
         grouped, rows = self.service_menu(ctx, "bs", "bg")
-        text = ctx.t("choose_group", groups=Raw(self._groups_text(ctx))) if grouped else ctx.t("choose_service")
-        await ctx.show(message_id, text, inline_kb(rows))
+        await ctx.show(message_id, ctx.t("choose_group" if grouped else "choose_service"), inline_kb(rows))
 
     async def flow_group(self, ctx: Ctx, index: int, message_id: int | None) -> None:
-        group, services, rows = self.group_menu(ctx, index, "bs", "bs")
-        await ctx.show(message_id, ctx.t("choose_service_in_group", group=group, services=Raw(services)),
-                       inline_kb(rows))
+        group, rows = self.group_menu(ctx, index, "bs", "bs")
+        await ctx.show(message_id, ctx.t("choose_service_in_group", group=group), inline_kb(rows))
 
     async def flow_masters(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
         service = self._service(ctx, service_id)
@@ -895,7 +879,10 @@ class BotApp:
         rows = _rows([ibtn(m.name, f"bm:{service_id}:{m.id}") for m in masters], 2)
         rows.append([ibtn(ctx.t("btn_any_master"), f"bm:{service_id}:any")])
         rows.append([ibtn(ctx.t("btn_back"), self._group_back(ctx, service_id, "bs", "bg"))])
-        await ctx.show(message_id, ctx.t("choose_master", service=service.title), inline_kb(rows))
+        await ctx.show(message_id, ctx.t(
+            "choose_master", service=service.title, price=ctx.tenant.price_str(service.price), duration=service.duration,
+            description=Raw(ctx.t("master_service_desc", description=service.description)) if service.description
+            else ""), inline_kb(rows))
 
     def _back_to_masters(self, ctx: Ctx, service_id: str) -> str:
         if len(ctx.tenant.masters_for(service_id)) <= 1:
@@ -1429,12 +1416,11 @@ class BotApp:
     async def admin_book_services(self, ctx: Ctx, message_id: int | None) -> None:
         grouped, rows = self.service_menu(ctx, "aBs", "aBg")
         rows.append([ibtn(ctx.at("btn_adm_book_cancel"), "aBx")])
-        text = ctx.at("adm_book_group", groups=Raw(self._groups_text(ctx))) if grouped else ctx.at("adm_book_service")
-        await ctx.show(message_id, text, inline_kb(rows))
+        await ctx.show(message_id, ctx.at("adm_book_group" if grouped else "adm_book_service"), inline_kb(rows))
 
     async def admin_book_group(self, ctx: Ctx, index: int, message_id: int | None) -> None:
-        group, services, rows = self.group_menu(ctx, index, "aBs", "aBs")
-        await ctx.show(message_id, ctx.at("adm_book_in_group", group=group, services=Raw(services)), inline_kb(rows))
+        group, rows = self.group_menu(ctx, index, "aBs", "aBs")
+        await ctx.show(message_id, ctx.at("adm_book_in_group", group=group), inline_kb(rows))
 
     async def admin_book_masters(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
         service = self._service(ctx, service_id)
