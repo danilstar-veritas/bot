@@ -14,6 +14,8 @@ ExecStart=/usr/bin/python3 /opt/barber-bot/run.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+# Час у журналі — київський (на час записів не впливає: його бот рахує за часовим поясом закладу).
+Environment=TZ=Europe/Kyiv
 
 [Install]
 WantedBy=multi-user.target

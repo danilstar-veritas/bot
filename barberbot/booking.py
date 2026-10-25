@@ -15,7 +15,7 @@ from .slots import Interval, free_starts
 
 class BookingError(Exception):
     """code: no_service, no_master, master_no_service, past, too_soon, too_far, slot_taken,
-    too_many, duplicate, not_found, inactive, too_late, same_time"""
+    too_many, week_limit, duplicate, not_found, inactive, too_late, same_time"""
 
     def __init__(self, code: str, **info):
         super().__init__(code)
@@ -57,7 +57,9 @@ class BookingService:
         return self.tenant.now() if admin else self.tenant.now() + timedelta(minutes=self.tenant.min_lead_min)
 
     def masters_for_sel(self, service_id: str, master_sel: str | None) -> list[Master]:
-        self.service(service_id)
+        svc = self.service(service_id)
+        if svc.hidden and not svc.base_id:
+            raise BookingError("no_service")  # послуга «лише додатком» — окремо на неї не записують
         if master_sel in (None, "", "any"):
             return self.tenant.masters_for(service_id)
         m = self.master(master_sel)
@@ -133,6 +135,16 @@ class BookingService:
             return None
         return min(candidates)[-1]
 
+    def _check_week_limit(self, client_id: int, start: datetime, exclude_id: int | None = None) -> None:
+        """Не більше max_per_week записів одного клієнта на календарний тиждень (пн–нд) за датою візиту."""
+        limit = self.tenant.max_per_week
+        if not limit:
+            return
+        monday = datetime.combine(start.date() - timedelta(days=start.weekday()), time.min)
+        count = self.db.client_bookings_count(client_id, monday, monday + timedelta(days=7), exclude_id)
+        if count >= limit:
+            raise BookingError("week_limit", count=count, limit=limit)
+
     def _check_window(self, start: datetime, admin: bool = False) -> None:
         now = self.tenant.now()
         if start <= now:
@@ -157,8 +169,10 @@ class BookingService:
         for b in upcoming:
             if parse_dt(b["start_at"]) < end and start < parse_dt(b["end_at"]):
                 raise BookingError("duplicate", booking_id=b["id"])
-        if not admin and len(upcoming) >= self.tenant.max_active_per_client:
+        if not admin and self.tenant.max_active_per_client and len(upcoming) >= self.tenant.max_active_per_client:
             raise BookingError("too_many", count=len(upcoming))
+        if not admin:
+            self._check_week_limit(client_id, start)
         self._check_window(start, admin)
         master_id = self.resolve_master(service_id, master_sel, start, admin=admin)
         if master_id is None:
@@ -174,6 +188,9 @@ class BookingService:
         end = start + timedelta(minutes=service.duration)
         booking_id = self.db.insert_booking(self.slug, client_id, service.id, master.id, service.title,
                                             master.name, start, end, service.price, source, now)
+        if self.tenant.prepay_enabled and source in ("buttons", "ai"):
+            # Записався сам — потрібна передоплата (запис, зроблений адміном, її не потребує).
+            self.db.set_booking_field(booking_id, "prepay", "waiting")
         self.db.log_event(self.slug, client_id, "booking_created", now, {"id": booking_id, "source": source})
         return self.db.get_booking(booking_id)
 
@@ -209,6 +226,7 @@ class BookingService:
         b = self._own_active(booking_id, client_id)
         if client_id is not None:
             self._check_late(b)
+            self._check_week_limit(b["client_id"], start, exclude_id=b["id"])
         self.service(b["service_id"])
         if master_sel in (None, ""):
             master_sel = b["master_id"] if b["master_id"] in self.tenant.masters else "any"
@@ -241,6 +259,11 @@ class BookingService:
         start = datetime.combine(day, time.min)
         statuses = ("active", "no_show") if include_noshow else ("active",)
         return self.db.bookings_between(self.slug, start, start + timedelta(days=1), statuses)
+
+    def prepay_deadline(self, booking) -> datetime:
+        """До коли треба внести передоплату: через prepay_hours після запису, але не пізніше початку візиту."""
+        return min(parse_dt(booking["created_at"]) + timedelta(hours=self.tenant.prepay_hours),
+                   parse_dt(booking["start_at"]))
 
     def mark_no_show(self, booking_id: int) -> sqlite3.Row:
         b = self.db.get_booking(booking_id)

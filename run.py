@@ -7,6 +7,7 @@
     python3 run.py eval      перевірити AI на тестових діалогах
     python3 run.py dialogs   вивантажити листування з клієнтами
     python3 run.py test      запустити автотести
+    python3 run.py backup    резервна копія бази (data/backups, 7 останніх)
 """
 
 import sys

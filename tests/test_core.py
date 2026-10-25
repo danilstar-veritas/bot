@@ -35,7 +35,15 @@ class ConfigTests(unittest.TestCase):
     def test_demo_config_loads(self):
         text = (ROOT / "config/tenants/demo-barbershop.toml").read_text(encoding="utf-8")
         text = text.replace("ВСТАВТЕ_ТОКЕН_ВІД_BOTFATHER", TOKEN).replace("admins = []", "admins = [42]")
-        t = load_tenant(write_toml(text, "demo.toml"))
+        # Без картки передоплата вимкнена і check про це попереджає.
+        no_card = load_tenant(write_toml(text, "demo.toml"))
+        self.assertFalse(no_card.prepay_enabled)
+        self.assertEqual(len(no_card.warnings), 1)
+        self.assertIn("[prepayment]", no_card.warnings[0])
+        t = load_tenant(write_toml(text.replace('card = ""', 'card = "5375 0000 0000 0000"'), "demo.toml"))
+        self.assertTrue(t.prepay_enabled)
+        self.assertEqual((t.prepay_amount, t.prepay_hours), (150, 2))
+        self.assertEqual((t.max_per_week, t.max_active_per_client), (5, 0))
         self.assertEqual(len(t.visible_services()), 16)
         # Розділи списку послуг — у порядку з налаштувань; діти — окремо хлопчики і дівчатка.
         self.assertEqual([(g, [s.id for s in ss]) for g, ss in t.service_groups()], [
@@ -90,7 +98,7 @@ class ConfigTests(unittest.TestCase):
     def test_demo_loads_for_console_without_token(self):
         t = load_tenant(ROOT / "config/tenants/demo-barbershop.toml", require_token=False)
         self.assertEqual(t.bot_token, "")
-        self.assertEqual(t.name, "Barbershop «Бритва»")
+        self.assertEqual(t.name, "Студія «Гострий стиль»")
 
     def test_settings_file_loads(self):
         s = load_settings(ROOT / "config/settings.toml", ROOT)
@@ -238,6 +246,31 @@ class SlotTests(unittest.TestCase):
             self.svc.create(self.client, "haircut", "andriy", datetime(2026, 10, 29, 10, 0), "buttons")
         self.assertEqual(cm.exception.code, "too_many")
 
+    def test_week_limit_per_client(self):
+        # 5 записів на календарний тиждень (пн–нд) за датою візиту; ліміт «2 майбутні» вимкнено.
+        self.tenant.max_active_per_client = 0
+        self.tenant.max_per_week = 5
+        for day in (27, 28, 29, 30, 31):  # вт–сб
+            self.svc.create(self.client, "haircut", "andriy", datetime(2026, 10, day, 10, 0), "buttons")
+        with self.assertRaises(BookingError) as cm:
+            self.svc.create(self.client, "beard", "andriy", datetime(2026, 10, 27, 14, 0), "buttons")
+        self.assertEqual((cm.exception.code, cm.exception.info["limit"]), ("week_limit", 5))
+        # Наступний тиждень — вже можна; інший клієнт — теж; адмін — без обмеження.
+        nxt = self.svc.create(self.client, "haircut", "andriy", datetime(2026, 11, 2, 10, 0), "buttons")
+        self.svc.create(self.client2, "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")
+        by_admin = self.svc.create(self.client, "beard", "oleg", datetime(2026, 10, 27, 14, 0), "admin")
+        # Перенести запис з наступного тижня на цей не можна. Запис адміна теж займає місце в тижні,
+        # а скасовані не рахуються.
+        with self.assertRaises(BookingError) as cm:
+            self.svc.reschedule(nxt["id"], datetime(2026, 10, 30, 15, 0), None, self.client)
+        self.assertEqual(cm.exception.code, "week_limit")
+        first = self.db.q("SELECT id FROM bookings WHERE client_id = ? ORDER BY start_at", self.client)[0]["id"]
+        self.svc.cancel(first, "client", self.client)
+        with self.assertRaises(BookingError):  # 4 своїх + 1 від адміна = 5
+            self.svc.reschedule(nxt["id"], datetime(2026, 10, 30, 15, 0), None, self.client)
+        self.svc.cancel(by_admin["id"], "admin")
+        self.svc.reschedule(nxt["id"], datetime(2026, 10, 30, 15, 0), None, self.client)
+
     def test_window_errors(self):
         for start, code in [(datetime(2026, 10, 26, 8, 0), "past"), (datetime(2026, 10, 26, 9, 30), "too_soon"),
                             (datetime(2026, 11, 20, 10, 0), "too_far")]:
@@ -300,3 +333,47 @@ class SlotTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DbFileTests(unittest.TestCase):
+    def test_wal_and_fast_sync(self):
+        from barberbot.db import DB
+        db = DB(Path(tempfile.mkdtemp()) / "bot.db")
+        try:
+            self.assertEqual(db.scalar("PRAGMA journal_mode"), "wal")
+            self.assertEqual(db.scalar("PRAGMA synchronous"), 1)  # NORMAL
+        finally:
+            db.close()
+
+
+class CallbackLengthTests(unittest.TestCase):
+    EXTRA = """
+[[services]]
+id = "superlonghaircut"
+title = "Довга назва"
+duration = 60
+price = 600
+
+[[services]]
+id = "extraordinarywsh"
+title = "Миття"
+duration = 15
+price = 100
+addon_only = true
+addon_for = ["superlonghaircut"]
+
+[[masters]]
+id = "{master}"
+name = "Майстер"
+services = ["superlonghaircut", "extraordinarywsh"]
+"""
+
+    def test_too_long_ids_rejected(self):
+        from .helpers import make_tenant
+        # «superlonghaircut+extraordinarywsh» (33) + майстер на 16 символів = 49 > 45.
+        with self.assertRaises(ConfigError) as cm:
+            make_tenant(extra=self.EXTRA.format(master="verylongmasterid"))
+        self.assertIn("кнопки Telegram", str(cm.exception))
+        # З коротшим id майстра (33 + 12 = 45) — вміщається.
+        t = make_tenant(extra=self.EXTRA.format(master="shortermaster"[:12]))
+        self.assertIn("superlonghaircut+extraordinarywsh", t.services)

@@ -9,8 +9,8 @@ import logging
 import socket
 import ssl
 import threading
-import urllib.error
-import urllib.request
+import time
+import urllib.parse
 
 log = logging.getLogger("barberbot.telegram")
 
@@ -65,7 +65,7 @@ SSL_CONTEXT = make_ssl_context()
 def create_ipv4_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
     """Як socket.create_connection, але лише через IPv4.
 
-    urllib, на відміну від браузера, не пробує IPv4 та IPv6 паралельно: якщо IPv6 «зависає»,
+    Python (http.client), на відміну від браузера, не пробує IPv4 та IPv6 паралельно: якщо IPv6 «зависає»,
     кожен запит чекає повний таймаут (30 с), і лише потім пробує IPv4.
     Якщо в адреси немає IPv4 — звичайне підключення.
     """
@@ -96,12 +96,89 @@ class IPv4HTTPSConnection(http.client.HTTPSConnection):
         self._create_connection = create_ipv4_connection
 
 
-class IPv4HTTPSHandler(urllib.request.HTTPSHandler):
-    def https_open(self, req):
-        return self.do_open(IPv4HTTPSConnection, req, context=self._context)
+# Помилки мережі, які може кинути http.client (таймаути, обриви, SSL — це OSError).
+NET_ERRORS = (OSError, http.client.HTTPException)
 
 
-HTTPS_OPENER = urllib.request.build_opener(IPv4HTTPSHandler(context=SSL_CONTEXT))
+class HttpPool:
+    """POST-запити з повторним використанням з'єднань (keep-alive).
+
+    Нове з'єднання — це TCP + TLS: із сервера до Telegram ~320 мс на запит, а на вже відкритому — ~105 мс.
+    Запити йдуть із різних потоків (run_blocking), тому вільні з'єднання лежать у спільному списку під замком;
+    одне з'єднання одночасно використовує лише один потік.
+    """
+
+    MAX_IDLE = 8          # скільки вільних з'єднань тримати на один сервер
+    IDLE_SECONDS = 50     # старіші не використовуємо: сервер міг їх уже закрити
+
+    def __init__(self):
+        self._idle: dict[tuple[str, str, int], list[tuple[http.client.HTTPConnection, float]]] = {}
+        self._lock = threading.Lock()
+
+    def _take(self, key: tuple[str, str, int]) -> http.client.HTTPConnection | None:
+        now = time.monotonic()
+        with self._lock:
+            idle = self._idle.get(key, [])
+            while idle:
+                conn, used = idle.pop()
+                if now - used < self.IDLE_SECONDS:
+                    return conn
+                conn.close()
+        return None
+
+    def _give(self, key: tuple[str, str, int], conn: http.client.HTTPConnection) -> None:
+        with self._lock:
+            idle = self._idle.setdefault(key, [])
+            if len(idle) < self.MAX_IDLE:
+                idle.append((conn, time.monotonic()))
+                return
+        conn.close()
+
+    def close_all(self) -> None:
+        """Закрити всі вільні з'єднання."""
+        with self._lock:
+            idle, self._idle = self._idle, {}
+        for conns in idle.values():
+            for conn, _ in conns:
+                conn.close()
+
+    def post(self, url: str, body: bytes, headers: dict, timeout: float) -> tuple[int, bytes, http.client.HTTPMessage]:
+        """Повертає (статус, тіло, заголовки). Помилки мережі — винятки з NET_ERRORS."""
+        parts = urllib.parse.urlsplit(url)
+        https = parts.scheme == "https"
+        key = (parts.scheme, parts.hostname or "", parts.port or (443 if https else 80))
+        path = parts.path + (f"?{parts.query}" if parts.query else "")
+        headers = {"User-Agent": "barberbot", **headers}
+        while True:
+            conn = self._take(key)
+            reused = conn is not None
+            if conn is None:
+                conn = IPv4HTTPSConnection(key[1], key[2], timeout=timeout, context=SSL_CONTEXT) if https \
+                    else http.client.HTTPConnection(key[1], key[2], timeout=timeout)
+            conn.timeout = timeout
+            if conn.sock is not None:
+                conn.sock.settimeout(timeout)
+            try:
+                conn.request("POST", path, body=body, headers=headers)
+                resp = conn.getresponse()
+                data = resp.read()
+            except (ConnectionResetError, BrokenPipeError, http.client.RemoteDisconnected,
+                    http.client.CannotSendRequest):
+                conn.close()
+                if reused:
+                    continue  # сервер уже закрив старе з'єднання й запит не отримав — пробуємо на новому
+                raise
+            except BaseException:
+                conn.close()
+                raise
+            if resp.will_close:
+                conn.close()
+            else:
+                self._give(key, conn)
+            return resp.status, data, resp.headers
+
+
+POOL = HttpPool()
 
 
 class TelegramError(Exception):
@@ -137,19 +214,16 @@ class TelegramAPI:
     def call_sync(self, method: str, params: dict | None = None, timeout: float = 30) -> object:
         url = f"{self.base_url}/bot{self.token}/{method}"
         data = json.dumps(params or {}, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
         try:
-            with HTTPS_OPENER.open(req, timeout=timeout) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            try:
-                body = json.loads(e.read().decode("utf-8"))
-            except Exception:
-                raise TelegramError(e.code, str(e.reason)) from None
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
+            status, raw, _ = POOL.post(url, data, {"Content-Type": "application/json"}, timeout)
+        except NET_ERRORS as e:
             if is_ssl_error(e):
                 raise NetworkError(SSL_HINT) from None
-            raise NetworkError(str(e)) from None
+            raise NetworkError(str(e) or e.__class__.__name__) from None
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except ValueError:
+            raise TelegramError(status, http.client.responses.get(status, f"HTTP {status}")) from None
         if not body.get("ok"):
             params_ = body.get("parameters") or {}
             raise TelegramError(int(body.get("error_code") or 0), str(body.get("description") or ""),

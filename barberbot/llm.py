@@ -8,15 +8,14 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import time
-import urllib.error
-import urllib.request
 import uuid
 from collections import OrderedDict
 
-from .telegram import HTTPS_OPENER, SSL_HINT, is_ssl_error, run_blocking
+from .telegram import NET_ERRORS, POOL, SSL_HINT, is_ssl_error, run_blocking
 
 log = logging.getLogger("barberbot.llm")
 
@@ -31,41 +30,38 @@ class LLMError(Exception):
 
 
 def post_json(url: str, payload: dict, headers: dict, timeout: float, retries: int) -> dict:
-    """POST JSON з повторами при збоях мережі, 429 і 5xx."""
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={**headers, "content-type": "application/json"},
-    )
+    """POST JSON з повторами при збоях мережі, 429 і 5xx (з'єднання — зі спільного пулу keep-alive)."""
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {**headers, "content-type": "application/json"}
     attempt = 0
     while True:
         try:
-            with HTTPS_OPENER.open(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            try:
-                body = json.loads(e.read().decode("utf-8"))
-                message = body.get("error", {}).get("message") or str(body)
-            except Exception:
-                message = str(e.reason)
-            if e.code in RETRY_STATUSES and attempt < retries:
-                retry_after = e.headers.get("retry-after") if e.headers else None
-                try:
-                    delay = min(float(retry_after), 20) if retry_after else 1.5 * (attempt + 1)
-                except ValueError:
-                    delay = 1.5 * (attempt + 1)
-                time.sleep(delay)
-                attempt += 1
-                continue
-            raise LLMError(f"HTTP {e.code}: {message}", e.code) from None
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
+            status, raw, resp_headers = POOL.post(url, data, headers, timeout)
+        except NET_ERRORS as e:
             if is_ssl_error(e):
                 raise LLMError(SSL_HINT) from None
             if attempt < retries:
                 time.sleep(1.5 * (attempt + 1))
                 attempt += 1
                 continue
-            raise LLMError(f"Мережа: {e}") from None
+            raise LLMError(f"Мережа: {e or e.__class__.__name__}") from None
+        if status < 400:
+            return json.loads(raw.decode("utf-8"))
+        try:
+            body = json.loads(raw.decode("utf-8"))
+            message = body.get("error", {}).get("message") or str(body)
+        except Exception:
+            message = http.client.responses.get(status, str(status))
+        if status in RETRY_STATUSES and attempt < retries:
+            retry_after = resp_headers.get("retry-after")
+            try:
+                delay = min(float(retry_after), 20) if retry_after else 1.5 * (attempt + 1)
+            except ValueError:
+                delay = 1.5 * (attempt + 1)
+            time.sleep(delay)
+            attempt += 1
+            continue
+        raise LLMError(f"HTTP {status}: {message}", status)
 
 
 class ClaudeClient:

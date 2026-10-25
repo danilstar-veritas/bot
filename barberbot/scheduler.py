@@ -6,6 +6,9 @@ import asyncio
 import logging
 from datetime import datetime, time, timedelta
 
+from .agent import add_note
+from .booking import BookingError
+from .config import fmt_hhmm
 from .db import parse_dt
 from .telegram import ibtn, inline_kb
 from .texts import Raw
@@ -34,11 +37,49 @@ class Scheduler:
     async def tick_all(self) -> None:
         for slug in list(self.app.tenants):
             try:
+                await self.prepay_timeouts(slug)
                 await self.reminders(slug)
                 await self.nudges(slug)
                 await self.digest(slug)
             except Exception:
                 log.exception("Помилка планувальника для %s", slug)
+
+    # ---------------------------------------------------------------- неоплачені записи
+    async def prepay_timeouts(self, slug: str) -> None:
+        """Через prepay_hours після запису: не сплатили — скасувати; клієнт каже, що сплатив, а адмін ще
+        не підтвердив, — не скасовуємо (гроші могли вже прийти), а один раз нагадуємо адмінам."""
+        app = self.app
+        tenant, db = app.tenants[slug], app.db
+        if not tenant.prepay_enabled:
+            return
+        now = tenant.now()
+        deadline = now - timedelta(hours=tenant.prepay_hours)
+        for b in db.unpaid_overdue(slug, deadline, now, prepay="claimed"):
+            key = f"prepay_reminded:{b['id']}"
+            if db.kv_get(slug, key):
+                continue
+            db.kv_set(slug, key, "1")
+            kb = inline_kb([[ibtn(tenant.t(tenant.lang, "btn_adm_prepay_ok"), f"aPy:{b['id']}")],
+                            [ibtn(tenant.t(tenant.lang, "btn_adm_cancel_booking"), f"acx:{b['id']}")]])
+            await app.notify_admins(tenant, tenant.t(
+                tenant.lang, "adm_prepay_overdue", hours=tenant.prepay_hours,
+                booking=Raw(app._booking_summary(tenant, b, db.get_client(b["client_id"])))), kb)
+        for b in db.unpaid_overdue(slug, deadline, now, prepay="waiting"):
+            try:
+                app.bookings[slug].cancel(b["id"], "unpaid")
+            except BookingError:
+                continue
+            start = parse_dt(b["start_at"])
+            if b["tg_id"] > 0 and not b["blocked"]:
+                lang = b["lang"] or tenant.lang
+                await app.send(tenant, b["tg_id"], tenant.t(
+                    lang, "client_cancelled_unpaid", service=b["service_title"], master=b["master_name"],
+                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
+            client = db.get_client(b["client_id"])
+            await app.notify_admins(tenant, tenant.t(tenant.lang, "adm_cancelled_unpaid", hours=tenant.prepay_hours,
+                                                     booking=Raw(app._booking_summary(tenant, b, client))))
+            add_note(db, tenant, b["client_id"],
+                     f"Запис №{b['id']} скасовано автоматично: передоплату не отримано вчасно.", app.settings)
 
     # ---------------------------------------------------------------- нагадування
     async def reminders(self, slug: str) -> None:

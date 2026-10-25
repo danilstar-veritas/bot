@@ -141,6 +141,8 @@ ERRORS_UK = {
     "too_far": "Записатися можна лише на {days} днів уперед.",
     "slot_taken": "Цей час недоступний (зайнятий або поза графіком). Візьми інший час із get_free_slots.",
     "too_many": "У клієнта вже {count} активних записів — це максимум. Запропонуй перенести або скасувати наявний.",
+    "week_limit": "На цей тиждень (пн–нд) у клієнта вже {count} записів — це максимум ({limit} на тиждень). "
+                  "Запропонуй інший тиждень.",
     "duplicate": "У клієнта вже є запис, що перетинається з цим часом (booking_id {booking_id}).",
     "not_found": "Запис не знайдено серед записів цього клієнта. Виклич get_my_bookings.",
     "inactive": "Цей запис уже неактивний (скасований або минув).",
@@ -342,7 +344,7 @@ class ToolExecutor:
             phone = normalize_phone(phone_raw)
             if phone is None:
                 return {"error": "bad_phone", "message": ERRORS_UK["bad_phone"]}
-            self.db.set_client_field(self.client["id"], "phone", phone)
+            self.db.set_client_phone(self.client["id"], phone)
             saved["phone"] = phone
         if name:
             self.db.set_client_field(self.client["id"], "name", name)

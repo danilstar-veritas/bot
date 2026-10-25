@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from barberbot import clock
 from barberbot.app import BotApp
@@ -437,6 +437,17 @@ class AdminTests(BotTestCase):
         self.assertNotIn("Скасовані", week)  # /week — лише робочий розклад
         self.assertEqual(self.db.get_booking(far["id"])["status"], "active")
 
+    async def test_week_limit_message(self):
+        self.tenant.max_active_per_client = 0
+        self.tenant.max_per_week = 1
+        client = self.make_client()
+        self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")
+        await self.send(cb("bc:beard:andriy:20261029:1200"))
+        last = self.tg.last(CLIENT_ID)
+        self.assertIn("На цей тиждень у вас уже максимум записів — 1", last["text"])
+        self.assertEqual([b["callback_data"] for b in self.tg.buttons(last)], ["menu:my"])
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 1)
+
     async def test_admin_cancel_notifies_client(self):
         client = self.make_client()
         b = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")
@@ -807,6 +818,7 @@ class AddonTests(BotTestCase):
     async def test_prices_grouped(self):
         await self.send(msg(text="💈 Послуги і ціни"))
         text = self.tg.last(CLIENT_ID)["text"]
+        self.assertTrue(text.startswith("💈 <b>Студія «Гострий стиль»</b>\n✨ <b>ПОСЛУГИ ТА ЦІНИ</b> ✨\n<i>"))
         men, women, boys, girls = (text.index(f"<b>{g}</b>") for g in (
             "👨 Чоловічі", "👩 Жіночі", "👦 Хлопчики (до 8 років)", "👧 Дівчатка (до 8 років)"))
         self.assertLess(men, text.index("Стрижка машинкою"))
@@ -873,6 +885,21 @@ class AddonTests(BotTestCase):
         await self.send(cb("aBs:kids_girl", uid=ADMIN_ID))
         self.assertEqual(self.kb(ADMIN_ID), [("Олена", "aBm:kids_girl:olena"), ("Марина", "aBm:kids_girl:maryna"),
                                              ("⬅️ Назад", "aBg:3")])
+
+    async def test_addon_only_cannot_be_booked_alone(self):
+        # Підставлена вручну кнопка — «застаріла»; запис і пошук часу через AI/код — помилка.
+        await self.send(cb("bs:wash"))
+        self.assertIn("неактуальна", self.tg.of("answerCallbackQuery")[-1]["text"])
+        await self.send(cb("bc:wash:olena:20261027:1200"))
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 0)
+        from barberbot.booking import BookingError
+        for fn in (lambda: self.booking.free_slots("wash", "any", datetime(2026, 10, 27).date()),
+                   lambda: self.booking.create(self.client()["id"], "wash", "olena", datetime(2026, 10, 27, 12, 0), "ai")):
+            with self.assertRaises(BookingError) as cm:
+                fn()
+            self.assertEqual(cm.exception.code, "no_service")
+        # А комбінація з додатком — працює.
+        self.booking.create(self.client()["id"], "haircut+wash", "olena", datetime(2026, 10, 27, 12, 0), "buttons")
 
     async def test_addon_button_rejects_plain_service(self):
         await self.send(cb("ba:haircut:oleg:20261027:1200"))  # не комбінація — застаріла кнопка
@@ -944,3 +971,231 @@ class AdminListTests(BotTestCase):
         self.assertIn("❌ <b>Скасовані</b> — 1", text)
         self.assertIn("Іван — скасував адмін", text)
         self.assertIn("<b>1. 14:00–15:00</b>", text)  # нумерація лише по дійсних
+
+
+PREPAY_TOML = """
+[prepayment]
+enabled = true
+amount = 150
+card = "5375 0000 1111 2222"
+recipient = "Олена П."
+pay_within_hours = 2
+"""
+
+
+class PrepayTests(BotTestCase):
+    """Передоплата: картка після запису, «Я оплатив(ла)», підтвердження адміном, автоскасування."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.tenant = make_tenant(extra=PREPAY_TOML)
+        self.app = BotApp(self.settings, [self.tenant], self.db, None, api_factory=lambda t: self.tg)
+        self.booking = self.app.bookings[self.slug]
+        self.make_client()
+
+    async def book(self) -> dict:
+        await self.send(cb("bc:haircut:andriy:20261027:1200"))
+        return self.db.q("SELECT * FROM bookings ORDER BY id DESC")[0]
+
+    def kb(self, chat_id):
+        return [(b["text"], b["callback_data"]) for b in self.tg.buttons(self.tg.last(chat_id))]
+
+    async def test_booked_message_shows_card_and_button(self):
+        b = await self.book()
+        self.assertEqual(b["prepay"], "waiting")
+        text = self.tg.last(CLIENT_ID)["text"]
+        self.assertIn("<b>Щоб закріпити запис — передоплата 150 грн</b>", text)
+        self.assertIn("Картка: <code>5375 0000 1111 2222</code>\nОтримувач: Олена П.", text)
+        self.assertIn("Оплатіть до <b>11:00</b>", text)  # запис о 9:00 + 2 год
+        self.assertEqual(self.kb(CLIENT_ID), [("✅ Я оплатив(ла)", f"pp:{b['id']}")])
+        admin = self.tg.last(ADMIN_ID)
+        self.assertIn("💳 Чекаємо передоплату 150 грн до 11:00", admin["text"])
+        self.assertEqual(self.kb(ADMIN_ID), [("✅ Оплату отримано", f"aPy:{b['id']}")])
+
+    async def test_claim_then_admin_confirms(self):
+        b = await self.book()
+        await self.send(cb(f"pp:{b['id']}"))
+        self.assertEqual(self.db.get_booking(b["id"])["prepay"], "claimed")
+        self.assertIn("Адміністратор перевірить оплату", self.tg.last(CLIENT_ID)["text"])
+        note = self.tg.last(ADMIN_ID)
+        self.assertIn("Клієнт повідомляє про оплату", note["text"])
+        self.assertEqual(self.kb(ADMIN_ID), [("✅ Оплату отримано", f"aPy:{b['id']}"),
+                                             ("🗑 Скасувати запис", f"acx:{b['id']}")])
+
+        await self.send(cb(f"aPy:{b['id']}", uid=ADMIN_ID))
+        self.assertEqual(self.db.get_booking(b["id"])["prepay"], "paid")
+        self.assertIn("Передоплату отримано — запис підтверджено", self.tg.last(CLIENT_ID)["text"])
+        self.assertIn("Передоплату підтверджено", self.tg.last(ADMIN_ID)["text"])
+        # Повторне натискання — лише підказка, без дублю повідомлень клієнту.
+        sent = len(self.tg.of("sendMessage", CLIENT_ID))
+        await self.send(cb(f"aPy:{b['id']}", uid=ADMIN_ID))
+        self.assertEqual(self.tg.of("answerCallbackQuery")[-1]["text"], "Передоплату вже підтверджено.")
+        self.assertEqual(len(self.tg.of("sendMessage", CLIENT_ID)), sent)
+
+    async def test_photo_asks_if_payment_then_claims(self):
+        b = await self.book()
+        photo = msg(photo=[{"file_id": "scr", "width": 10, "height": 10}])
+        photo_id = photo["message"]["message_id"]
+        await self.send(photo)
+        self.assertEqual(self.tg.last(CLIENT_ID)["text"], "📸 Це скрін оплати передоплати?")
+        self.assertEqual(self.kb(CLIENT_ID), [("✅ Так, це оплата", f"ps:{photo_id}"),
+                                              ("Ні, інше питання", f"px:{photo_id}")])
+        self.assertEqual(self.db.get_booking(b["id"])["prepay"], "waiting")  # поки не відповів — не оплата
+
+        await self.send(cb(f"ps:{photo_id}"))
+        self.assertEqual(self.db.get_booking(b["id"])["prepay"], "claimed")
+        self.assertIn("скрін отримали", self.tg.last(CLIENT_ID)["text"])
+        self.assertIn("надіслав підтвердження оплати", self.tg.last(ADMIN_ID)["text"])
+        self.assertEqual(self.tg.of("copyMessage")[-1]["message_id"], photo_id)
+        # AI для клієнта не ставиться на паузу через скрін оплати.
+        self.assertIsNone(self.client()["paused_until"])
+
+    async def test_photo_that_is_not_payment_goes_to_admin_as_question(self):
+        b = await self.book()
+        photo = msg(photo=[{"file_id": "hair", "width": 10, "height": 10}])
+        await self.send(photo)
+        await self.send(cb(f"px:{photo['message']['message_id']}"))
+        self.assertEqual(self.db.get_booking(b["id"])["prepay"], "waiting")
+        self.assertEqual(self.tg.of("copyMessage")[-1]["message_id"], photo["message"]["message_id"])
+        self.assertIsNotNone(self.client()["paused_until"])  # звичайна передача адміністратору
+
+    async def test_claimed_not_cancelled_admins_reminded_once(self):
+        b = await self.book()
+        await self.send(cb(f"pp:{b['id']}"))
+        sched = Scheduler(self.app)
+        set_time(2026, 10, 26, 11, 0)
+        await sched.prepay_timeouts(self.slug)
+        self.assertEqual(self.db.get_booking(b["id"])["status"], "active")
+        note = self.tg.last(ADMIN_ID)
+        self.assertIn("Оплату ще не підтверджено", note["text"])
+        self.assertEqual(self.kb(ADMIN_ID), [("✅ Оплату отримано", f"aPy:{b['id']}"),
+                                             ("🗑 Скасувати запис", f"acx:{b['id']}")])
+        sent = len(self.tg.of("sendMessage", ADMIN_ID))
+        set_time(2026, 10, 26, 12, 0)
+        await sched.prepay_timeouts(self.slug)
+        self.assertEqual(len(self.tg.of("sendMessage", ADMIN_ID)), sent)  # лише одне нагадування
+
+    async def test_unpaid_cancelled_after_two_hours(self):
+        b = await self.book()
+        paid = self.booking.create(self.client()["id"], "beard", "andriy", datetime(2026, 10, 28, 12, 0), "buttons")
+        self.db.set_booking_field(paid["id"], "prepay", "paid")
+        sched = Scheduler(self.app)
+        set_time(2026, 10, 26, 10, 59)
+        await sched.prepay_timeouts(self.slug)
+        self.assertEqual(self.db.get_booking(b["id"])["status"], "active")
+        set_time(2026, 10, 26, 11, 0)
+        await sched.prepay_timeouts(self.slug)
+        cancelled = self.db.get_booking(b["id"])
+        self.assertEqual((cancelled["status"], cancelled["cancelled_by"]), ("cancelled", "unpaid"))
+        self.assertIn("передоплату не отримано вчасно", self.tg.last(CLIENT_ID)["text"])
+        self.assertIn("Запис скасовано автоматично", self.tg.last(ADMIN_ID)["text"])
+        self.assertEqual(self.db.get_booking(paid["id"])["status"], "active")  # оплачений — лишається
+        await self.send(msg(uid=ADMIN_ID, text="/all"))
+        self.assertIn("Іван — не оплачено", self.tg.last(ADMIN_ID)["text"])
+
+    async def test_deadline_not_after_visit_start(self):
+        # Запис на 10:30 сьогодні: оплатити треба до початку, а не до 11:00; почався — не скасовуємо.
+        await self.send(cb("bc:haircut:andriy:20261026:1030"))
+        b = self.db.q("SELECT * FROM bookings")[0]
+        self.assertIn("Оплатіть до <b>10:30</b>", self.tg.last(CLIENT_ID)["text"])
+        set_time(2026, 10, 26, 11, 5)
+        await Scheduler(self.app).prepay_timeouts(self.slug)
+        self.assertEqual(self.db.get_booking(b["id"])["status"], "active")
+
+    async def test_status_in_my_bookings_and_admin_lists(self):
+        b = await self.book()
+        await self.send(msg(text="🗓 Мої записи"))
+        my = self.tg.last(CLIENT_ID)
+        self.assertIn("💳 Очікуємо передоплату 150 грн до 11:00", my["text"])
+        self.assertIn(("✅ Я оплатив(ла) 27.10 12:00", f"pp:{b['id']}"), self.kb(CLIENT_ID))
+        await self.send(msg(uid=ADMIN_ID, text="/all"))
+        self.assertIn("💳 ⏳ чекаємо передоплату", self.tg.last(ADMIN_ID)["text"])
+        self.assertIn(("💳 1 · оплату отримано · Іван", f"aPy:{b['id']}"), self.kb(ADMIN_ID))
+        set_time(2026, 10, 27, 9, 0)
+        await self.send(msg(uid=ADMIN_ID, text="/today"))
+        self.assertIn(("💳 1 — оплату отримано", f"aPy:{b['id']}"), self.kb(ADMIN_ID))
+
+    async def test_admin_booking_needs_no_prepay_and_contacts_mention_it(self):
+        b = self.booking.create(self.client()["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "admin")
+        self.assertEqual(b["prepay"], "")
+        await self.send(msg(text="📍 Контакти"))
+        self.assertIn("💳 Передоплата 150 грн — реквізити надішлемо одразу після запису", self.tg.last(CLIENT_ID)["text"])
+
+    async def test_other_client_cannot_claim(self):
+        b = await self.book()
+        await self.send(cb(f"pp:{b['id']}", uid=777))
+        self.assertEqual(self.db.get_booking(b["id"])["prepay"], "waiting")
+
+
+class PhoneMatchTests(BotTestCase):
+    """Один номер у різних форматах — один клієнт; записи «безтелеграмного» дубля переходять до клієнта."""
+
+    async def test_admin_finds_client_by_phone_in_any_format(self):
+        await self.send(msg(contact={"phone_number": "380671234567", "user_id": CLIENT_ID, "first_name": "Іван"}))
+        self.assertEqual(self.client()["phone"], "+380671234567")
+        await self.send(msg(uid=ADMIN_ID, text="/book"))
+        await self.send(cb("aBt:haircut:andriy:20261027:1200", uid=ADMIN_ID))
+        await self.send(msg(uid=ADMIN_ID, text="Іван 067 123 45 67"))
+        self.assertIn("уже є в боті", self.tg.last(ADMIN_ID)["text"])
+        await self.send(cb("aBy", uid=ADMIN_ID))
+        self.assertEqual(self.db.q("SELECT client_id FROM bookings")[0]["client_id"], self.client()["id"])
+        self.assertIn("Адміністратор записав вас", self.tg.last(CLIENT_ID)["text"])
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM clients WHERE tg_id < 0"), 0)
+
+    async def test_offline_bookings_move_to_client_who_shares_phone(self):
+        offline = self.db.create_offline_client(self.slug, "Олена", "0671234567", self.tenant.now())
+        b = self.booking.create(offline["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "admin")
+        await self.send(msg(text="/start"))
+        await self.send(msg(contact={"phone_number": "380671234567", "user_id": CLIENT_ID, "first_name": "Іван"}))
+        me = self.client()
+        self.assertEqual(self.db.get_booking(b["id"])["client_id"], me["id"])
+        self.assertIsNone(self.db.get_client(offline["id"]))
+        await self.send(msg(text="🗓 Мої записи"))
+        self.assertIn("Завтра, вт 27.10 о 12:00", self.tg.last(CLIENT_ID)["text"])
+
+    async def test_other_numbers_are_not_merged(self):
+        offline = self.db.create_offline_client(self.slug, "Інша", "0509999999", self.tenant.now())
+        self.booking.create(offline["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "admin")
+        await self.send(msg(contact={"phone_number": "380671234567", "user_id": CLIENT_ID, "first_name": "Іван"}))
+        self.assertIsNotNone(self.db.get_client(offline["id"]))
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings WHERE client_id = ?", offline["id"]), 1)
+
+
+class RestartTests(BotTestCase):
+    """Незавершені кроки діалогу зберігаються в базі й переживають перезапуск бота."""
+
+    def restart(self):
+        self.app = BotApp(self.settings, [self.tenant], self.db, self.llm, api_factory=lambda t: self.tg)
+        self.booking = self.app.bookings[self.slug]
+
+    async def test_phone_step_survives_restart(self):
+        self.make_client(phone=None)
+        await self.send(cb("bc:haircut:andriy:20261027:1200"))
+        self.assertIn("номер телефону", self.tg.last(CLIENT_ID)["text"])
+        self.restart()
+        await self.send(msg(text="+380501234567"))
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 1)
+        self.assertIn("Готово, ви записані", self.tg.texts(CLIENT_ID)[-1])
+
+    async def test_yes_to_ai_card_after_restart(self):
+        client = self.make_client()
+        self.app.pending[(self.slug, client["id"])] = ("ac:haircut:andriy:20261027:1200",
+                                                       self.tenant.now() + timedelta(minutes=30), None)
+        self.restart()
+        await self.send(msg(text="так"))
+        b = self.db.q("SELECT * FROM bookings")[0]
+        self.assertEqual((b["source"], b["start_at"]), ("ai", "2026-10-27 12:00"))
+
+    async def test_old_state_forgotten(self):
+        self.app.states[(self.slug, CLIENT_ID)] = ("await_phone", {"data": "bc:haircut:andriy:20261027:1200"})
+        self.assertEqual(self.app.states.get((self.slug, CLIENT_ID))[0], "await_phone")
+        set_time(2026, 10, 27, 10, 0)  # понад 24 години потому
+        self.assertIsNone(self.app.states.get((self.slug, CLIENT_ID)))
+        self.assertIsNone(self.db.kv_get(self.slug, f"state:{CLIENT_ID}"))  # і прибрано з бази
+
+    async def test_stats_count_admin_bookings(self):
+        client = self.make_client()
+        self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "admin")
+        self.booking.create(client["id"], "beard", "andriy", datetime(2026, 10, 28, 12, 0), "buttons")
+        await self.send(msg(uid=ADMIN_ID, text="/stats"))
+        self.assertIn("створено: 2 (AI-чат: 0, кнопки: 1, адмін: 1)", self.tg.last(ADMIN_ID)["text"])

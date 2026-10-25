@@ -1,0 +1,12 @@
+# Щодня о 04:30 за Києвом; якщо сервер був вимкнений — одразу після ввімкнення.
+# Встановлення: sudo cp deploy/barberbot-backup.* /etc/systemd/system/ && sudo systemctl enable --now barberbot-backup.timer
+
+[Unit]
+Description=Barber Bot — щоденна резервна копія бази
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Europe/Kyiv
+Persistent=true
+
+[Install]
+WantedBy=timers.target

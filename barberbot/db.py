@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -114,6 +116,15 @@ def parse_dt(value: str) -> datetime:
     return datetime.strptime(value[:16], DT_FMT)
 
 
+def phone_key(phone: str | None) -> str:
+    """Останні 9 цифр: «+380671234567», «380671234567» і «0671234567» — той самий номер."""
+    digits = re.sub(r"\D", "", phone or "")
+    return digits[-9:] if len(digits) >= 9 else ""
+
+
+PHONE_KEY_SQL = "substr(replace(phone, '+', ''), -9)"
+
+
 class DB:
     def __init__(self, path: str | Path):
         self.path = str(path)
@@ -123,6 +134,9 @@ class DB:
         self.conn.row_factory = sqlite3.Row
         if self.path != ":memory:":
             self.conn.execute("PRAGMA journal_mode=WAL")
+            # У режимі WAL це безпечно для цілісності бази, а запис ~у 100 разів швидший (без fsync на кожну зміну);
+            # при раптовому вимкненні сервера можуть загубитися лише останні секунди змін.
+            self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA)
         self._migrate()
@@ -134,9 +148,22 @@ class DB:
             self.conn.execute("ALTER TABLE bookings ADD COLUMN note TEXT")
         if "cleared" not in columns:  # скасований запис, який адмін прибрав зі списку /all
             self.conn.execute("ALTER TABLE bookings ADD COLUMN cleared INTEGER NOT NULL DEFAULT 0")
+        if "prepay" not in columns:  # передоплата: '' — не потрібна, waiting / claimed (клієнт каже, що сплатив) / paid
+            self.conn.execute("ALTER TABLE bookings ADD COLUMN prepay TEXT NOT NULL DEFAULT ''")
 
     def close(self) -> None:
         self.conn.close()
+
+    @contextmanager
+    def transaction(self):
+        """Кілька змін — атомарно: або всі, або жодної."""
+        self.conn.execute("BEGIN")
+        try:
+            yield
+        except BaseException:
+            self.conn.execute("ROLLBACK")
+            raise
+        self.conn.execute("COMMIT")
 
     # ---------------------------------------------------------- basics
     def q(self, sql: str, *args) -> list[sqlite3.Row]:
@@ -174,9 +201,40 @@ class DB:
         return self.one("SELECT * FROM clients WHERE tenant = ? AND tg_id = ?", tenant, tg_id)
 
     def find_client_by_phone(self, tenant: str, phone: str) -> sqlite3.Row | None:
-        """Клієнт із таким телефоном; якщо їх кілька — спершу той, хто є в Telegram."""
-        return self.one("SELECT * FROM clients WHERE tenant = ? AND phone = ? ORDER BY tg_id < 0, id DESC LIMIT 1",
-                        tenant, phone)
+        """Клієнт із таким телефоном (у будь-якому форматі); якщо їх кілька — спершу той, хто є в Telegram."""
+        key = phone_key(phone)
+        if not key:
+            return None
+        return self.one(f"SELECT * FROM clients WHERE tenant = ? AND {PHONE_KEY_SQL} = ? "
+                        f"ORDER BY tg_id < 0, id DESC LIMIT 1", tenant, key)
+
+    def set_client_phone(self, client_id: int, phone: str) -> int:
+        """Зберегти номер клієнта. Якщо це клієнт із Telegram, а адмін раніше записував людину з цим номером
+        як клієнта без Telegram, — переносимо ті записи сюди (і дубль видаляємо): тепер клієнт бачить їх
+        у «Мої записи» й отримує нагадування. Повертає, скільки записів перенесено."""
+        client = self.get_client(client_id)
+        if client is None:
+            return 0
+        key = phone_key(phone)
+        dupes = [r["id"] for r in self.q(f"SELECT id FROM clients WHERE tenant = ? AND tg_id < 0 AND id != ? "
+                                         f"AND {PHONE_KEY_SQL} = ?", client["tenant"], client_id, key)] \
+            if key and client["tg_id"] > 0 else []
+        with self.transaction():
+            self.set_client_field(client_id, "phone", phone)
+            if not dupes:
+                return 0
+            marks = ",".join("?" * len(dupes))
+            moved = self.conn.execute(f"UPDATE bookings SET client_id = ? WHERE client_id IN ({marks})",
+                                      (client_id, *dupes)).rowcount
+            for table in ("events", "relay", "history"):
+                self.conn.execute(f"UPDATE {table} SET client_id = ? WHERE client_id IN ({marks})", (client_id, *dupes))
+            if not client["name"]:
+                name = self.scalar(f"SELECT name FROM clients WHERE id IN ({marks}) AND name IS NOT NULL "
+                                   f"ORDER BY id DESC LIMIT 1", *dupes, default=None)
+                if name:
+                    self.set_client_field(client_id, "name", name)
+            self.conn.execute(f"DELETE FROM clients WHERE id IN ({marks})", dupes)
+        return moved
 
     def create_offline_client(self, tenant: str, name: str, phone: str | None, now: datetime) -> sqlite3.Row:
         """Клієнт без Telegram (записаний адміністратором). tg_id від'ємний — йому нічого не надсилаємо."""
@@ -243,11 +301,27 @@ class DB:
             tenant, dt_str(start), dt_str(end), *statuses,
         )
 
+    def client_bookings_count(self, client_id: int, start: datetime, end: datetime,
+                              exclude_id: int | None = None) -> int:
+        """Скільки записів (без скасованих) у клієнта з початком у [start, end)."""
+        return self.scalar("SELECT COUNT(*) FROM bookings WHERE client_id = ? AND status IN ('active', 'no_show') "
+                           "AND start_at >= ? AND start_at < ? AND id != ?",
+                           client_id, dt_str(start), dt_str(end), exclude_id or 0)
+
     def client_upcoming(self, client_id: int, now: datetime) -> list[sqlite3.Row]:
         return self.q(
             "SELECT * FROM bookings WHERE client_id = ? AND status = 'active' AND start_at > ? ORDER BY start_at",
             client_id, dt_str(now),
         )
+
+    def unpaid_overdue(self, tenant: str, created_before: datetime, now: datetime,
+                       prepay: str = "waiting") -> list[sqlite3.Row]:
+        """Майбутні активні записи з таким станом передоплати, створені раніше за created_before."""
+        return self.q(
+            """SELECT b.*, c.tg_id, c.lang, c.blocked FROM bookings b JOIN clients c ON c.id = b.client_id
+               WHERE b.tenant = ? AND b.status = 'active' AND b.prepay = ?
+                 AND b.created_at <= ? AND b.start_at > ? ORDER BY b.id""",
+            tenant, prepay, dt_str(created_before), dt_str(now))
 
     def clear_cancelled(self, tenant: str, since: datetime) -> int:
         """Прибрати зі списку /all скасовані записи від since. Записи лишаються в базі (і в статистиці)."""
@@ -270,7 +344,7 @@ class DB:
         )
 
     def set_booking_field(self, booking_id: int, field: str, value) -> None:
-        if field not in {"reminders_sent", "client_confirmed", "nudged", "note"}:
+        if field not in {"reminders_sent", "client_confirmed", "nudged", "note", "prepay"}:
             raise ValueError(field)
         self.conn.execute(f"UPDATE bookings SET {field} = ? WHERE id = ?", (value, booking_id))
 
@@ -387,3 +461,6 @@ class DB:
 
     def kv_set(self, tenant: str, key: str, value: str | None) -> None:
         self.conn.execute("INSERT OR REPLACE INTO kv (tenant, key, value) VALUES (?, ?, ?)", (tenant, key, value))
+
+    def kv_delete(self, tenant: str, key: str) -> None:
+        self.conn.execute("DELETE FROM kv WHERE tenant = ? AND key = ?", (tenant, key))

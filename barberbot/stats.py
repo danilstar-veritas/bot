@@ -21,6 +21,7 @@ def compute_stats(db: DB, tenant: Tenant, settings: Settings, days: int = 30) ->
            WHERE b.tenant = ? AND b.created_at >= ?""", slug, dt_str(since)) if r["tg_id"] not in admins]
     by_ai = sum(1 for r in created if r["source"] == "ai")
     by_buttons = sum(1 for r in created if r["source"] == "buttons")
+    by_admin = sum(1 for r in created if r["source"] == "admin")
     night = sum(1 for r in created if parse_dt(r["created_at"]).hour >= 22 or parse_dt(r["created_at"]).hour < 8)
     cancelled = sum(1 for r in created if r["status"] == "cancelled")
 
@@ -54,7 +55,7 @@ def compute_stats(db: DB, tenant: Tenant, settings: Settings, days: int = 30) ->
 
     return {
         "days": days,
-        "created": len(created), "by_ai": by_ai, "by_buttons": by_buttons, "night": night,
+        "created": len(created), "by_ai": by_ai, "by_buttons": by_buttons, "by_admin": by_admin, "night": night,
         "done": done, "noshow": noshow, "cancelled": cancelled, "upcoming": upcoming,
         "clients": len(wrote), "handoffs": handoffs, "auto_rate": auto_rate,
         "reminders": db.count_events(slug, "reminder_sent", since),

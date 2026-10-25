@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import logging
 import re
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta
 
+from . import clock
 from .agent import Agent, add_note, history_transcript
 from .booking import BookingError, BookingService
 from .config import RANGE_RE, ConfigError, Settings, Tenant, fmt_hhmm, load_tenant, parse_hhmm, parse_user_date
@@ -33,6 +35,39 @@ POLL_TIMEOUT = 25
 
 class Expired(Exception):
     """Кнопка застаріла або містить неправильні дані."""
+
+
+class StateStore:
+    """Незавершені кроки діалогу (чекаємо телефон, дані клієнта для /book, «так» на картку AI) — у базі,
+    щоб пережити перезапуск бота. Ключ — (заклад, id); старіші за ttl вважаються забутими."""
+
+    def __init__(self, db: DB, prefix: str, ttl: timedelta, encode, decode):
+        self.db, self.prefix, self.ttl = db, prefix, ttl
+        self.encode, self.decode = encode, decode
+
+    def get(self, key: tuple[str, int], default=None):
+        slug, ident = key
+        raw = self.db.kv_get(slug, f"{self.prefix}:{ident}")
+        if raw is None:
+            return default
+        try:
+            item = json.loads(raw)
+            if clock.utcnow() - datetime.fromisoformat(item["at"]) > self.ttl:
+                raise ValueError("expired")
+            return self.decode(item["value"])
+        except (ValueError, KeyError, TypeError):
+            self.db.kv_delete(slug, f"{self.prefix}:{ident}")
+            return default
+
+    def __setitem__(self, key: tuple[str, int], value) -> None:
+        slug, ident = key
+        item = {"at": clock.utcnow().isoformat(), "value": self.encode(value)}
+        self.db.kv_set(slug, f"{self.prefix}:{ident}", json.dumps(item, ensure_ascii=False))
+
+    def pop(self, key: tuple[str, int], default=None):
+        value = self.get(key, default)
+        self.db.kv_delete(key[0], f"{self.prefix}:{key[1]}")
+        return value
 
 
 PHONE_IN_TEXT_RE = re.compile(r"\+?\d[\d\s()\-.]{7,}\d")
@@ -161,9 +196,12 @@ class BotApp:
         self.apis = {slug: factory(t) for slug, t in self.tenants.items()}
         self.bookings = {slug: BookingService(t, db) for slug, t in self.tenants.items()}
         self.agent = Agent(settings, llm) if llm is not None else None
-        self.states: dict[tuple[str, int], tuple[str, dict]] = {}
+        # Крок діалогу користувача: (вид, дані). Зберігається в базі — переживає перезапуск.
+        self.states = StateStore(db, "state", timedelta(hours=24), lambda v: list(v), lambda v: tuple(v))
         # Остання картка від AI, яку клієнт може підтвердити текстом «так»: (дані кнопки, до коли, id картки)
-        self.pending: dict[tuple[str, int], tuple[str, datetime, int | None]] = {}
+        self.pending = StateStore(db, "pending", timedelta(hours=24),
+                                  lambda v: [v[0], v[1].isoformat(), v[2]],
+                                  lambda v: (v[0], datetime.fromisoformat(v[1]), v[2]))
         self.locks: dict[tuple[str, int], asyncio.Lock] = defaultdict(asyncio.Lock)
         self.last_alert: dict[str, datetime] = {}
         self.last_ack: dict[tuple[str, int], datetime] = {}
@@ -379,10 +417,12 @@ class BotApp:
 
     async def notify_admins(self, tenant: Tenant, text: str, kb: dict | None = None,
                             client_id: int | None = None) -> None:
-        for admin in tenant.admins:
-            sent = await self.send(tenant, admin, text, kb)
-            if sent and client_id is not None:
-                self.db.add_relay(tenant.slug, admin, sent["message_id"], client_id, tenant.now())
+        # Усім адміністраторам одночасно, а не по черзі.
+        results = await asyncio.gather(*(self.send(tenant, admin, text, kb) for admin in tenant.admins))
+        if client_id is not None:
+            for admin, sent in zip(tenant.admins, results):
+                if sent:
+                    self.db.add_relay(tenant.slug, admin, sent["message_id"], client_id, tenant.now())
 
     async def alert_tech(self, tenant: Tenant, error: str) -> None:
         now = tenant.now()
@@ -488,7 +528,7 @@ class BotApp:
     async def save_contact(self, ctx: Ctx, contact: dict) -> str | None:
         phone = normalize_phone(str(contact.get("phone_number") or ""), from_contact=True)
         if phone:
-            ctx.db.set_client_field(ctx.client_id, "phone", phone)
+            ctx.db.set_client_phone(ctx.client_id, phone)
             if contact.get("first_name") and contact.get("user_id") == ctx.user_id and not ctx.client["name"]:
                 ctx.db.set_client_field(ctx.client_id, "name", short(contact["first_name"], 60))
             ctx.refresh()
@@ -516,7 +556,7 @@ class BotApp:
             if not phone:
                 await ctx.send(ctx.t("bad_phone"), self.phone_kb(ctx))
                 return True
-            ctx.db.set_client_field(ctx.client_id, "phone", phone)
+            ctx.db.set_client_phone(ctx.client_id, phone)
             ctx.refresh()
             await ctx.send(ctx.t("phone_saved"), self.main_kb(ctx))
         self.states.pop(ctx.key, None)
@@ -621,6 +661,29 @@ class BotApp:
                                                       sent["message_id"] if sent else None)
 
     async def on_media(self, ctx: Ctx, msg: dict) -> None:
+        if ctx.tenant.prepay_enabled and self._unpaid_for_client(ctx):
+            # Найімовірніше, це скрін оплати, але може бути й фото зачіски — питаємо.
+            mid = msg["message_id"]
+            kb = inline_kb([[ibtn(ctx.t("btn_photo_is_payment"), f"ps:{mid}")],
+                            [ibtn(ctx.t("btn_photo_other"), f"px:{mid}")]])
+            await ctx.send(ctx.t("prepay_photo_ask"), kb)
+            return
+        await self.media_to_admins(ctx, msg)
+
+    async def payment_screenshot(self, ctx: Ctx, message_id: int, button_msg: int | None) -> None:
+        """Клієнт підтвердив, що надіслане фото — скрін оплати."""
+        unpaid = self._unpaid_for_client(ctx)
+        await ctx.clear_kb(button_msg)
+        if not unpaid:
+            raise Expired()
+        await self.forward_to_admins(ctx, {"message_id": message_id})
+        for b in unpaid:
+            ctx.db.set_booking_field(b["id"], "prepay", "claimed")
+            await self._ask_admins_to_confirm(ctx, ctx.db.get_booking(b["id"]), "adm_prepay_screenshot")
+        await ctx.send(ctx.t("prepay_screenshot_client"))
+
+    async def media_to_admins(self, ctx: Ctx, msg: dict) -> None:
+        """Фото чи файл від клієнта — питання для адміністратора."""
         if self.is_paused_for(ctx):
             await self.forward_to_admins(ctx, msg)
             return
@@ -797,6 +860,13 @@ class BotApp:
             await self.send_reschedule_card(ctx, _int(a[0]), start, resolved, message_id)
         elif op == "ry" and len(a) == 4:
             await self.do_reschedule(ctx, _int(a[0]), datetime.combine(_d(a[1]), _t(a[2])), a[3], message_id)
+        elif op == "pp" and len(a) == 1:
+            return await self.prepay_claim(ctx, _int(a[0]), message_id)
+        elif op == "ps" and len(a) == 1:
+            await self.payment_screenshot(ctx, _int(a[0]), message_id)
+        elif op == "px" and len(a) == 1:
+            await ctx.clear_kb(message_id)
+            await self.media_to_admins(ctx, {"message_id": _int(a[0])})
         elif op == "ok" and len(a) == 1:
             await self.will_come(ctx, _int(a[0]), message_id)
         elif op == "nb" and len(a) == 2:
@@ -812,8 +882,8 @@ class BotApp:
     # ---------------------------------------------------------------- запис кнопками
     def _service(self, ctx: Ctx, service_id: str):
         service = ctx.tenant.services.get(service_id)
-        if service is None or not ctx.tenant.masters_for(service_id):
-            raise Expired()
+        if service is None or not ctx.tenant.masters_for(service_id) or (service.hidden and not service.base_id):
+            raise Expired()  # немає такої, ніхто не робить або це послуга «лише додатком»
         return service
 
     def _master_label(self, ctx: Ctx, master_sel: str) -> str:
@@ -976,6 +1046,9 @@ class BotApp:
             self.pending.pop(key, None)
             if e.code == "duplicate":
                 await ctx.show(message_id, ctx.t("already_booked"))
+            elif e.code == "week_limit":
+                await ctx.show(message_id, ctx.t("week_limit", limit=e.info.get("limit", 0)),
+                               inline_kb([[ibtn(ctx.t("btn_my"), "menu:my")]]))
             elif e.code == "too_many":
                 await ctx.show(message_id, ctx.t("too_many_active", count=e.info.get("count", 0)),
                                inline_kb([[ibtn(ctx.t("btn_my"), "menu:my")]]))
@@ -991,19 +1064,69 @@ class BotApp:
                      day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start),
                      price=tenant.price_str(b["price"]),
                      address=Raw(ctx.t("booked_address", address=address)) if address else "")
-        if message_id and await ctx.edit(message_id, text):
+        pay_kb = None
+        if b["prepay"] == "waiting":
+            text += self.prepay_block(ctx, b)
+            pay_kb = inline_kb([[ibtn(ctx.t("btn_prepay_done"), f"pp:{b['id']}")]])
+        if message_id and await ctx.edit(message_id, text, pay_kb):
             pass
         else:
-            await ctx.send(text, self.main_kb(ctx))
+            await ctx.send(text, pay_kb or self.main_kb(ctx))
         add_note(ctx.db, tenant, ctx.client_id,
                  f"Клієнт підтвердив запис №{b['id']}: {b['service_title']}, {b['master_name']}, "
                  f"{start:%d.%m.%Y} о {fmt_hhmm(start)}.", self.settings)
-        if tenant.notify_new_bookings:
-            await self.notify_admins(tenant, ctx.at(
-                "adm_new_booking", via=ctx.at("adm_via_ai") if source == "ai" else "",
-                client=self.client_label(tenant, ctx.db.get_client(ctx.client_id)),
-                service=b["service_title"], master=b["master_name"], day=tenant.day_label(start.date(), tenant.lang),
-                time=fmt_hhmm(start), price=tenant.price_str(b["price"])), client_id=ctx.client_id)
+        if tenant.notify_new_bookings or b["prepay"]:
+            note = ctx.at("adm_new_booking", via=ctx.at("adm_via_ai") if source == "ai" else "",
+                          client=self.client_label(tenant, ctx.db.get_client(ctx.client_id)),
+                          service=b["service_title"], master=b["master_name"],
+                          day=tenant.day_label(start.date(), tenant.lang),
+                          time=fmt_hhmm(start), price=tenant.price_str(b["price"]))
+            kb = None
+            if b["prepay"]:
+                note += ctx.at("adm_new_booking_prepay", amount=tenant.price_str(tenant.prepay_amount),
+                               deadline=self._when(tenant, ctx.booking.prepay_deadline(b), tenant.lang))
+                kb = inline_kb([[ibtn(ctx.at("btn_adm_prepay_ok"), f"aPy:{b['id']}")]])
+            await self.notify_admins(tenant, note, kb, client_id=ctx.client_id)
+
+    # ---------------------------------------------------------------- передоплата
+    def _when(self, tenant: Tenant, moment: datetime, lang: str) -> str:
+        """«17:30» сьогодні або «завтра, вт 27.10 17:30»."""
+        if moment.date() == tenant.today():
+            return fmt_hhmm(moment)
+        label = tenant.day_label(moment.date(), lang)
+        return f"{label[:1].lower()}{label[1:]} {fmt_hhmm(moment)}"
+
+    def prepay_block(self, ctx: Ctx, b) -> str:
+        """Реквізити передоплати під повідомленням про запис."""
+        tenant = ctx.tenant
+        return ctx.t("prepay_block", amount=tenant.price_str(tenant.prepay_amount), card=tenant.prepay_card,
+                     recipient=Raw(ctx.t("prepay_recipient", recipient=tenant.prepay_recipient))
+                     if tenant.prepay_recipient else "",
+                     deadline=self._when(tenant, ctx.booking.prepay_deadline(b), ctx.lang))
+
+    def _unpaid_for_client(self, ctx: Ctx) -> list:
+        return [b for b in ctx.booking.upcoming_for_client(ctx.client_id) if b["prepay"] in ("waiting", "claimed")]
+
+    async def _ask_admins_to_confirm(self, ctx: Ctx, b, key: str) -> None:
+        tenant = ctx.tenant
+        kb = inline_kb([[ibtn(ctx.at("btn_adm_prepay_ok"), f"aPy:{b['id']}")],
+                        [ibtn(ctx.at("btn_adm_cancel_booking"), f"acx:{b['id']}")]])
+        await self.notify_admins(tenant, ctx.at(key, amount=tenant.price_str(tenant.prepay_amount),
+                                                booking=Raw(self._booking_summary(tenant, b, ctx.client))),
+                                 kb, client_id=ctx.client_id)
+
+    async def prepay_claim(self, ctx: Ctx, booking_id: int, message_id: int | None) -> str | None:
+        """Клієнт натиснув «Я оплатив(ла)»: позначаємо і просимо адміна перевірити."""
+        b = ctx.db.get_booking(booking_id)
+        if b is None or b["client_id"] != ctx.client_id or b["status"] != "active" or not b["prepay"]:
+            raise Expired()
+        await ctx.clear_kb(message_id)
+        if b["prepay"] == "paid":
+            return ctx.t("prepay_already_paid")
+        ctx.db.set_booking_field(b["id"], "prepay", "claimed")
+        await ctx.send(ctx.t("prepay_claimed_client"))
+        await self._ask_admins_to_confirm(ctx, ctx.db.get_booking(b["id"]), "adm_prepay_claim_note")
+        return None
 
     # ---------------------------------------------------------------- мої записи
     async def show_my(self, ctx: Ctx, message_id: int | None) -> None:
@@ -1019,6 +1142,11 @@ class BotApp:
             text += ctx.t("my_item", day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start),
                           service=b["service_title"], master=b["master_name"])
             label = f"{start:%d.%m} {fmt_hhmm(start)}"
+            if b["prepay"]:
+                text += ctx.t(f"my_prepay_{b['prepay']}", amount=tenant.price_str(tenant.prepay_amount),
+                              deadline=self._when(tenant, ctx.booking.prepay_deadline(b), ctx.lang))
+            if b["prepay"] == "waiting":
+                buttons.append([ibtn(ctx.t("btn_prepay_done_item", short=label), f"pp:{b['id']}")])
             # Кожна кнопка — окремим рядком: удвох в одному рядку текст на телефоні обрізається.
             buttons.append([ibtn(ctx.t("btn_resched_item", short=label), f"rd:{b['id']}")])
             buttons.append([ibtn(ctx.t("btn_cancel_item", short=label), f"cx:{b['id']}")])
@@ -1027,7 +1155,7 @@ class BotApp:
 
     async def show_prices(self, ctx: Ctx) -> None:
         tenant = ctx.tenant
-        text = ctx.t("prices_header")
+        text = ctx.t("prices_header", name=tenant.name)
         groups = tenant.service_groups()
         for group, services in groups:
             if group and len(groups) > 1:
@@ -1056,6 +1184,8 @@ class BotApp:
             text += ctx.t("contacts_directions", directions=info["directions"])
         if info.get("payment"):
             text += ctx.t("contacts_payment", payment=info["payment"])
+        if tenant.prepay_enabled:
+            text += ctx.t("contacts_prepay", amount=tenant.price_str(tenant.prepay_amount), hours=tenant.prepay_hours)
         if tenant.masters:
             text += ctx.t("contacts_masters_header")
             for m in tenant.masters.values():
@@ -1184,6 +1314,8 @@ class BotApp:
             await self.resched_times(ctx, booking_id, day, message_id, prefix=ctx.t("slot_taken"))
         elif e.code == "same_time":
             await ctx.show(message_id, ctx.t("already_booked"))
+        elif e.code == "week_limit":
+            await ctx.show(message_id, ctx.t("week_limit", limit=e.info.get("limit", 0)))
         else:
             await self.cancel_error(ctx, e, message_id)
 
@@ -1301,6 +1433,8 @@ class BotApp:
                         client=self.client_label(tenant, r), flags=self._flags(r))
         if r["note"]:
             text += tenant.t(tenant.lang, "adm_note_line", note=r["note"])
+        if r["prepay"] and r["status"] == "active":
+            text += tenant.t(tenant.lang, f"adm_prepay_{r['prepay']}")
         return text
 
     def _booking_summary(self, tenant: Tenant, b, client) -> str:
@@ -1327,9 +1461,13 @@ class BotApp:
         rows = ctx.booking.day_bookings(day)
         text = self.render_day(ctx.tenant, day, rows)
         now = dt_str(ctx.tenant.now())
-        buttons = [[ibtn(ctx.at("btn_adm_noshow_n", n=n), f"ans:{r['id']}"),
-                    ibtn(ctx.at("btn_adm_cancel_n", n=n), f"acx:{r['id']}")]
-                   for n, r in enumerate(rows, 1) if r["status"] == "active" and r["start_at"] > now]
+        buttons = []
+        for n, r in enumerate(rows, 1):
+            if r["status"] == "active" and r["prepay"] in ("waiting", "claimed"):
+                buttons.append([ibtn(ctx.at("btn_adm_prepay_n", n=n), f"aPy:{r['id']}")])
+            if r["status"] == "active" and r["start_at"] > now:
+                buttons.append([ibtn(ctx.at("btn_adm_noshow_n", n=n), f"ans:{r['id']}"),
+                                ibtn(ctx.at("btn_adm_cancel_n", n=n), f"acx:{r['id']}")])
         if buttons:
             text += ctx.at("adm_legend")
         await ctx.show(message_id, text, inline_kb(buttons) if buttons else None)
@@ -1363,7 +1501,7 @@ class BotApp:
         lang = tenant.lang
         text = tenant.t(lang, "adm_cancelled_header", count=len(rows))
         for r in rows:
-            by = "admin" if r["cancelled_by"] == "admin" else "client"
+            by = r["cancelled_by"] if r["cancelled_by"] in ("admin", "unpaid") else "client"
             text += tenant.t(lang, "adm_cancelled_item",
                              day=tenant.day_label(date.fromisoformat(r["start_at"][:10]), lang),
                              start=r["start_at"][11:16], master=r["master_name"], service=r["service_title"],
@@ -1399,6 +1537,9 @@ class BotApp:
                 continue
             when = f"{tenant.weekday_short(date.fromisoformat(r['start_at'][:10]), tenant.lang)} " \
                    f"{r['start_at'][8:10]}.{r['start_at'][5:7]} {r['start_at'][11:16]}"
+            if r["prepay"] in ("waiting", "claimed"):
+                rows.append([ibtn(ctx.at("btn_adm_prepay_item", n=n, client=self._short_name(tenant, r)),
+                                  f"aPy:{r['id']}")])
             rows.append([ibtn(ctx.at("btn_adm_cancel_item", n=n, when=when, client=self._short_name(tenant, r)),
                               f"acx:{r['id']}")])
         if rows:
@@ -1496,6 +1637,7 @@ class BotApp:
             await ctx.send(ctx.at("adm_book_need_name"))
             return
         data.update(name=name, phone=phone, note=note, tg_id=tg_id)
+        self.states[ctx.key] = ("admin_book_client", data)
         await self.admin_book_card(ctx, data, None)
 
     def _find_book_client(self, ctx: Ctx, data: dict):
@@ -1554,7 +1696,7 @@ class BotApp:
         if not client["name"]:
             db.set_client_field(client["id"], "name", data["name"])
         if data.get("phone") and not client["phone"]:
-            db.set_client_field(client["id"], "phone", data["phone"])
+            db.set_client_phone(client["id"], data["phone"])
         b = ctx.booking.create(client["id"], service_id, master_id, start, "admin")
         if data.get("note"):
             db.set_booking_field(b["id"], "note", data["note"])
@@ -1727,6 +1869,24 @@ class BotApp:
                     lang, "client_cancelled_by_admin", service=b["service_title"], master=b["master_name"],
                     day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
                 add_note(ctx.db, tenant, client["id"], f"Адміністратор скасував запис №{b['id']}.", self.settings)
+        elif op == "aPy" and len(a) == 1:
+            b = ctx.db.get_booking(_int(a[0]))
+            if b is None or b["tenant"] != tenant.slug or b["status"] != "active" or not b["prepay"]:
+                raise Expired()
+            if b["prepay"] == "paid":
+                return ctx.at("adm_prepay_already")
+            ctx.db.set_booking_field(b["id"], "prepay", "paid")
+            client = ctx.db.get_client(b["client_id"])
+            await ctx.send(ctx.at("adm_prepay_ok_done", booking=Raw(self._booking_summary(tenant, b, client))))
+            if client and client["tg_id"] > 0 and not client["blocked"]:
+                lang = client["lang"] or tenant.lang
+                start = parse_dt(b["start_at"])
+                await self.send(tenant, client["tg_id"], tenant.t(
+                    lang, "prepay_paid_client", service=b["service_title"], master=b["master_name"],
+                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
+                add_note(ctx.db, tenant, client["id"], f"Адміністратор підтвердив передоплату за запис №{b['id']}.",
+                         self.settings)
+            return ctx.at("adm_prepay_ok_alert")
         elif op == "aCc":
             count = len(self.visible_cancelled(tenant, tenant.today()))
             if not count:

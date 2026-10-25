@@ -6,6 +6,7 @@
     python3 run.py eval [файл] — прогнати тестові діалоги з config/eval.toml і перевірити поведінку AI
     python3 run.py dialogs [файл] [днів] — вивантажити листування з клієнтами в текстовий файл
     python3 run.py test        — запустити автотести
+    python3 run.py backup [N]  — резервна копія бази в data/backups (зберігаються N останніх, типово 7)
 """
 
 from __future__ import annotations
@@ -15,9 +16,10 @@ import json
 import logging
 import logging.handlers
 import signal
+import sqlite3
 import sys
 import tomllib
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import __version__
@@ -433,6 +435,48 @@ def cmd_test() -> int:
     return 0 if result.wasSuccessful() else 1
 
 
+# ====================================================================== backup
+def cmd_backup(args: list[str]) -> int:
+    """Узгоджена копія бази (працює й під час роботи бота) + перевірка цілісності; старі копії видаляє."""
+    try:
+        settings = load_settings(SETTINGS_PATH, ROOT)
+        keep = int(args[0]) if args else 7
+    except ConfigError as e:
+        print(f"{FAIL} {e}")
+        return 1
+    except ValueError:
+        print(f"{FAIL} Кількість копій має бути числом, наприклад: python3 run.py backup 7")
+        return 1
+    source = settings.data_dir / "bot.db"
+    if not source.exists():
+        print(f"{FAIL} Базу не знайдено: {source}")
+        return 1
+    folder = settings.data_dir / "backups"
+    folder.mkdir(mode=0o750, parents=True, exist_ok=True)
+    target = folder / f"bot-{datetime.now():%Y%m%d-%H%M%S}.db"
+    n = 1
+    while target.exists():
+        n += 1
+        target = folder / f"bot-{datetime.now():%Y%m%d-%H%M%S}-{n}.db"
+    src, dst = sqlite3.connect(source), sqlite3.connect(target)
+    try:
+        src.backup(dst)
+        ok = dst.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        src.close()
+        dst.close()
+    target.chmod(0o640)  # там дані клієнтів
+    if not ok:
+        target.unlink()
+        print(f"{FAIL} Копія не пройшла перевірку цілісності — не збережено.")
+        return 1
+    copies = sorted(folder.glob("bot-*.db"), key=lambda p: p.stat().st_mtime)
+    for old in copies[:-keep] if keep > 0 else []:
+        old.unlink()
+    print(f"{OK} Резервна копія: {target} (усього копій: {min(len(copies), keep)})")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     cmd = argv[0] if argv else "run"
     rest = argv[1:]
@@ -448,6 +492,8 @@ def main(argv: list[str]) -> int:
         return cmd_dialogs(rest)
     if cmd == "test":
         return cmd_test()
+    if cmd == "backup":
+        return cmd_backup(rest)
     print(__doc__)
     return 0 if cmd in ("help", "-h", "--help") else 1
 

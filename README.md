@@ -35,7 +35,7 @@ config/settings.toml           ключ AI, модель, ліміти
 config/tenants/*.toml          по файлу на кожен заклад (приклад: demo-barbershop.toml)
 config/eval.toml               тестові діалоги для перевірки AI
 barberbot/                     код бота
-tests/                         автотести (62 тести)
+tests/                         автотести (130 тестів)
 deploy/barberbot.service       автозапуск на сервері (Linux)
 data/                          з'явиться після запуску: база bot.db і журнал bot.log
 ```
@@ -162,6 +162,9 @@ chown -R barberbot /opt/barber-bot
 cp deploy/barberbot.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now barberbot
+cp deploy/barberbot-backup.service deploy/barberbot-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now barberbot-backup.timer   # щоденна резервна копія бази о 04:30
 
 journalctl -u barberbot -f      # подивитися журнал (вихід — Ctrl+C)
 ```
@@ -170,7 +173,7 @@ journalctl -u barberbot -f      # подивитися журнал (вихід 
 
 **Важливо:** один бот (токен) не можна запускати у двох місцях одночасно — коли перенесете бота на сервер, на Mac його зупиніть.
 
-**Резервні копії:** уся історія — у файлі `data/bot.db`. Копіюйте його час від часу: `scp root@IP:/opt/barber-bot/data/bot.db ~/Desktop/`.
+**Резервні копії:** щодня о 04:30 (за Києвом) бот сам робить копію бази в `data/backups/` і зберігає 7 останніх. Вручну: `python3 run.py backup`. Скопіювати копії собі: `scp -r root@IP:/opt/barber-bot/data/backups ~/Desktop/`.
 
 ## Скільки коштує AI
 

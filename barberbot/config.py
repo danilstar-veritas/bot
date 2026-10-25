@@ -22,6 +22,7 @@ SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 TOKEN_RE = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{30,}$")
 WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 DAY_OFF_WORDS = {"", "off", "-", "—", "closed", "no", "вихідний", "выходной", "x"}
+CALLBACK_IDS_MAX = 64 - len("aBt:::20261027:1200")  # скільки символів лишається на id послуги й майстра
 RANGE_RE = re.compile(r"^\s*(\d{1,2})[:.](\d{2})\s*[-–—]\s*(\d{1,2})[:.](\d{2})\s*$")
 
 
@@ -360,6 +361,16 @@ class Tenant:
     masters: dict[str, Master]
     texts_override: dict[str, dict[str, str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    # Передоплата за запис (клієнт сам записався кнопками чи через AI): сума, куди платити, скільки чекати.
+    prepay_amount: float = 0
+    prepay_card: str = ""
+    prepay_recipient: str = ""
+    prepay_hours: int = 2
+    max_per_week: int = 0  # скільки записів один клієнт може мати на календарний тиждень (0 — без обмеження)
+
+    @property
+    def prepay_enabled(self) -> bool:
+        return self.prepay_amount > 0 and bool(self.prepay_card)
 
     # ---- час
     def now(self) -> datetime:
@@ -582,6 +593,12 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
     except ValueError:
         raise ConfigError(f"{where} → [notifications] → digest_at: час у форматі \"09:00\" або \"\".") from None
 
+    pp = s.section("prepayment")
+    prepay_on = pp.bool("enabled", False)
+    prepay_card = pp.str("card")
+    if prepay_on and not prepay_card:
+        warnings.append("[prepayment] увімкнено, але не вказано card — передоплату вимкнено, поки не впишете картку.")
+
     ai = s.section("ai")
     address_form = ai.str("address_form", "ви").lower() or "ви"
     if address_form not in ("ви", "ти"):
@@ -673,6 +690,14 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
             for m in doers:
                 m.services.append(combo.id)
 
+    # Дані кнопок Telegram — до 64 байтів; найдовша кнопка — «aBt:<послуга>:<майстер>:<дата>:<час>».
+    for m in masters.values():
+        for sid in m.services:
+            if len(sid) + len(m.id) > CALLBACK_IDS_MAX:
+                raise ConfigError(f"{where}: id «{sid}» (послуга) і «{m.id}» (майстер) разом довші за "
+                                  f"{CALLBACK_IDS_MAX} символів — кнопки Telegram їх не вмістять. Скоротіть id "
+                                  f"послуги, додатка чи майстра (комбінація послуги з додатком — це «послуга+додаток»).")
+
     texts_override: dict[str, dict[str, str]] = {}
     raw_texts = raw.get("texts") or {}
     if not isinstance(raw_texts, dict):
@@ -696,7 +721,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         min_lead_min=b.int("min_lead_min", 60, 0, 7 * 24 * 60),
         buffer_min=b.int("buffer_min", 0, 0, 120),
         require_phone=b.bool("require_phone", True),
-        max_active_per_client=b.int("max_active_per_client", 2, 1, 20),
+        max_active_per_client=b.int("max_active_per_client", 2, 0, 20),
         cancel_min_hours=b.int("cancel_min_hours", 0, 0, 168),
         holidays=holidays,
         reminder_hours=reminder_hours,
@@ -714,6 +739,11 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         ai_daily_token_limit=token_limit,
         services=services, masters=masters,
         texts_override=texts_override, warnings=warnings,
+        prepay_amount=pp.num("amount", 0) if prepay_on else 0,
+        prepay_card=prepay_card if prepay_on else "",
+        prepay_recipient=pp.str("recipient") if prepay_on else "",
+        prepay_hours=pp.int("pay_within_hours", 2, 1, 72),
+        max_per_week=b.int("max_per_week_per_client", 0, 0, 100),
     )
 
 

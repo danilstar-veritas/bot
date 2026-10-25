@@ -239,6 +239,24 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("invalid x-api-key", out)
 
+    def test_backup_keeps_last_copies(self):
+        import os
+        import sqlite3
+        db = DB(self.tmp / "data" / "bot.db")
+        db.log_event("shop", None, "msg_in", clock.utcnow().replace(tzinfo=None))
+        db.close()
+        for _ in range(3):
+            code, out = self.run_cli(cli.cmd_backup, ["2"])
+            self.assertEqual(code, 0, out)
+            time.sleep(0.02)
+        copies = sorted((self.tmp / "data" / "backups").glob("bot-*.db"))
+        self.assertEqual(len(copies), 2)
+        for c in copies:
+            self.assertEqual(oct(os.stat(c).st_mode & 0o777), "0o640")
+            con = sqlite3.connect(c)
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM events").fetchone()[0], 1)
+            con.close()
+
     def test_eval_runner(self):
         scenarios = self.tmp / "eval.toml"
         scenarios.write_text("""

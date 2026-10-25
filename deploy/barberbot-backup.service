@@ -1,0 +1,11 @@
+# Щоденна резервна копія бази (запускає barberbot-backup.timer).
+
+[Unit]
+Description=Barber Bot — резервна копія бази
+
+[Service]
+Type=oneshot
+User=barberbot
+WorkingDirectory=/opt/barber-bot
+ExecStart=/usr/bin/python3 /opt/barber-bot/run.py backup 7
+Environment=TZ=Europe/Kyiv
