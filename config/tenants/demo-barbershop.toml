@@ -108,18 +108,22 @@ sun = "off"
 # ── Послуги ──────────────────────────────────────────────────────────
 # id — коротке латинське ім'я (до 16 символів), потрібне боту. Не змінюйте id, коли вже є записи.
 # duration — тривалість у хвилинах, price — ціна числом.
+# group — розділ у списку послуг; послуги з однаковим group показуються разом під заголовком.
 
+# ── 👨 Чоловічі
 [[services]]
 id = "haircut"
 title = "Чоловіча стрижка"
 duration = 60
 price = 600
+group = "👨 Чоловічі"
 
 [[services]]
 id = "beard"
 title = "Моделювання бороди"
 duration = 30
 price = 350
+group = "👨 Чоловічі"
 
 [[services]]
 id = "combo"
@@ -127,26 +131,23 @@ title = "Стрижка + борода"
 duration = 90
 price = 850
 description = "Найпопулярніше: стрижка, оформлення бороди, гарячий рушник."
-
-[[services]]
-id = "kids"
-title = "Дитяча стрижка (до 12 років)"
-duration = 45
-price = 450
+group = "👨 Чоловічі"
 
 [[services]]
 id = "buzz"
 title = "Стрижка машинкою"
 duration = 30
 price = 350
+group = "👨 Чоловічі"
 
-
+# ── 👩 Жіночі
 [[services]]
 id = "women_short"
 title = "Жіноча стрижка (коротке волосся)"
 duration = 60
 price = 700
 description = "Волосся до підборіддя. Укладання входить у вартість."
+group = "👩 Жіночі"
 
 [[services]]
 id = "women_medium"
@@ -154,6 +155,7 @@ title = "Жіноча стрижка (середнє волосся)"
 duration = 90
 price = 850
 description = "Волосся до плечей. Укладання входить у вартість."
+group = "👩 Жіночі"
 
 [[services]]
 id = "women_long"
@@ -161,6 +163,7 @@ title = "Жіноча стрижка (довге волосся)"
 duration = 90
 price = 950
 description = "Волосся нижче плечей. Укладання входить у вартість."
+group = "👩 Жіночі"
 
 [[services]]
 id = "pixie"
@@ -168,6 +171,7 @@ title = "Жіноча стрижка піксі / андеркат"
 duration = 60
 price = 750
 description = "Коротка модельна стрижка, можна з вистриганням машинкою."
+group = "👩 Жіночі"
 
 [[services]]
 id = "trim_ends"
@@ -175,21 +179,39 @@ title = "Підрівнювання кінчиків"
 duration = 30
 price = 400
 description = "Освіжити форму без зміни довжини."
+group = "👩 Жіночі"
 
 [[services]]
 id = "bangs"
 title = "Стрижка чубчика"
 duration = 30
 price = 200
+group = "👩 Жіночі"
 
+# ── 🧒 Дитячі
+[[services]]
+id = "kids_boy"
+title = "Дитяча стрижка для хлопчика (до 8 років)"
+duration = 45
+price = 400
+group = "🧒 Дитячі (до 8 років)"
+
+[[services]]
+id = "kids_girl"
+title = "Дитяча стрижка для дівчинки (до 8 років)"
+duration = 60
+price = 500
+group = "🧒 Дитячі (до 8 років)"
+
+# ── Додатково (лише кнопкою «➕» на картці запису)
 [[services]]
 id = "wash"
 title = "Миття голови"
 duration = 15
 price = 150
-# Лише додатком (кнопка «➕» на картці запису), окремо не записують.
 addon_only = true
-addon_for = ["haircut", "combo", "kids", "buzz", "women_short", "women_medium", "women_long", "pixie", "bangs"]
+addon_for = ["haircut", "combo", "buzz", "women_short", "women_medium", "women_long", "pixie", "bangs",
+             "kids_boy", "kids_girl"]
 
 
 # ── Майстри ──────────────────────────────────────────────────────────
@@ -199,13 +221,13 @@ addon_for = ["haircut", "combo", "kids", "buzz", "women_short", "women_medium", 
 [[masters]]
 id = "andriy"
 name = "Андрій"
-services = ["haircut", "beard", "combo", "kids", "buzz", "wash"]
+services = ["haircut", "beard", "combo", "kids_boy", "kids_girl", "buzz", "wash"]
 about = "Топ-барбер, 8 років досвіду, спеціаліст із фейдів."
 
 [[masters]]
 id = "oleg"
 name = "Олег"
-services = ["haircut", "beard", "combo", "kids", "buzz", "wash"]
+services = ["haircut", "beard", "combo", "kids_boy", "kids_girl", "buzz", "wash"]
 about = "Класичні стрижки і борода."
   [masters.schedule]
   mon = "off"
@@ -215,13 +237,13 @@ about = "Класичні стрижки і борода."
 [[masters]]
 id = "olena"
 name = "Олена"
-services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids", "haircut", "buzz", "wash"]
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_girl", "haircut", "buzz", "wash"]
 about = "Жіночі, дитячі та класичні чоловічі стрижки."
 
 [[masters]]
 id = "maryna"
 name = "Марина"
-services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids", "haircut", "buzz", "wash"]
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_girl", "haircut", "buzz", "wash"]
 about = "Жіночі, дитячі та класичні чоловічі стрижки."
 
 

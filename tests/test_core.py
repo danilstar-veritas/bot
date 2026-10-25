@@ -36,14 +36,22 @@ class ConfigTests(unittest.TestCase):
         text = (ROOT / "config/tenants/demo-barbershop.toml").read_text(encoding="utf-8")
         text = text.replace("ВСТАВТЕ_ТОКЕН_ВІД_BOTFATHER", TOKEN).replace("admins = []", "admins = [42]")
         t = load_tenant(write_toml(text, "demo.toml"))
-        self.assertEqual(len(t.visible_services()), 11)
+        self.assertEqual(len(t.visible_services()), 12)
+        # Розділи списку послуг — у порядку з налаштувань, дитячі — окремо для хлопчиків і дівчаток.
+        self.assertEqual([(g, [s.id for s in ss]) for g, ss in t.service_groups()], [
+            ("👨 Чоловічі", ["haircut", "beard", "combo", "buzz"]),
+            ("👩 Жіночі", ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs"]),
+            ("🧒 Дитячі (до 8 років)", ["kids_boy", "kids_girl"]),
+        ])
+        self.assertEqual((t.services["kids_boy"].price, t.services["kids_girl"].price), (400, 500))
+        self.assertNotIn("kids", t.services)
         # Миття голови — лише додатком, до всього, крім кінчиків і бороди; у всіх майстрів.
         combos = {s.id: s for s in t.services.values() if s.base_id}
         self.assertTrue(t.services["wash"].hidden)
         self.assertTrue(all(c.endswith("+wash") for c in combos))
         self.assertEqual({c.split("+")[0] for c in combos},
-                         {"haircut", "combo", "kids", "buzz", "women_short", "women_medium", "women_long",
-                          "pixie", "bangs"})
+                         {"haircut", "combo", "kids_boy", "kids_girl", "buzz", "women_short", "women_medium",
+                          "women_long", "pixie", "bangs"})
         self.assertEqual({m.id for m in t.masters_for("haircut+wash")}, {"andriy", "oleg", "olena", "maryna"})
         self.assertEqual((combos["women_long+wash"].duration, combos["women_long+wash"].price), (105, 1100))
         self.assertEqual([s.id for s in t.addons_for("haircut", "oleg")], ["haircut+wash"])
@@ -53,15 +61,15 @@ class ConfigTests(unittest.TestCase):
             self.assertNotIn("women_long", t.masters[m].services)
         for m in ("olena", "maryna"):
             self.assertIn("women_long", t.masters[m].services)
-            self.assertIn("kids", t.masters[m].services)
+            self.assertIn("kids_girl", t.masters[m].services)
             self.assertIn("haircut", t.masters[m].services)
             self.assertIn("buzz", t.masters[m].services)
             self.assertNotIn("beard", t.masters[m].services)
             self.assertNotIn("combo", t.masters[m].services)
         self.assertEqual(t.masters["oleg"].schedule[0], [])  # пн — вихідний
         self.assertEqual(len(t.masters["oleg"].schedule[6]), 1)  # нд — 11-17
-        self.assertIn("kids", t.masters["oleg"].services)
-        self.assertIn("oleg", [m.id for m in t.masters_for("kids+wash")])
+        self.assertTrue({"kids_boy", "kids_girl"} <= set(t.masters["oleg"].services))
+        self.assertIn("oleg", [m.id for m in t.masters_for("kids_girl+wash")])
         self.assertEqual(t.price_str(850), "850 грн")
         self.assertEqual(t.warnings, [])
         summary = t.schedule_summary("uk")

@@ -746,6 +746,8 @@ class BotApp:
             if not ctx.is_admin:
                 return ctx.t("alert_no_access")
             return await self.admin_callback(ctx, op, a, message_id)
+        if op == "noop":
+            return None
         if op == "menu":
             if a == ["book"]:
                 await self.flow_services(ctx, message_id)
@@ -822,11 +824,20 @@ class BotApp:
             raise Expired()
         return master.name
 
-    async def flow_services(self, ctx: Ctx, message_id: int | None) -> None:
+    def service_rows(self, ctx: Ctx, prefix: str) -> list[list[dict]]:
+        """Кнопки послуг по розділах; заголовок розділу — кнопка, що нічого не робить."""
         tenant = ctx.tenant
-        rows = [[ibtn(ctx.t("btn_service", title=s.title, price=tenant.price_str(s.price)), f"bs:{s.id}")]
-                for s in tenant.visible_services() if tenant.masters_for(s.id)]
-        await ctx.show(message_id, ctx.t("choose_service"), inline_kb(rows))
+        groups = tenant.service_groups()
+        rows = []
+        for group, services in groups:
+            if group and len(groups) > 1:
+                rows.append([ibtn(ctx.t("btn_group_header", group=group), "noop")])
+            rows += [[ibtn(ctx.t("btn_service", title=s.title, price=tenant.price_str(s.price)), f"{prefix}:{s.id}")]
+                     for s in services]
+        return rows
+
+    async def flow_services(self, ctx: Ctx, message_id: int | None) -> None:
+        await ctx.show(message_id, ctx.t("choose_service"), inline_kb(self.service_rows(ctx, "bs")))
 
     async def flow_masters(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
         service = self._service(ctx, service_id)
@@ -979,15 +990,17 @@ class BotApp:
     async def show_prices(self, ctx: Ctx) -> None:
         tenant = ctx.tenant
         text = ctx.t("prices_header")
-        for s in tenant.visible_services():
-            masters = tenant.masters_for(s.id)
-            if not masters:
-                continue
-            names = ", ".join(m.name for m in masters) if len(tenant.masters) > 1 else ""
-            text += ctx.t("price_item", title=s.title, price=tenant.price_str(s.price), duration=s.duration,
-                          masters=Raw(ctx.t("price_masters", masters=names)) if names else "")
-            if s.description:
-                text += ctx.t("price_desc", description=s.description)
+        groups = tenant.service_groups()
+        for group, services in groups:
+            if group and len(groups) > 1:
+                text += ctx.t("price_group", group=group)
+            for s in services:
+                masters = tenant.masters_for(s.id)
+                names = ", ".join(m.name for m in masters) if len(tenant.masters) > 1 else ""
+                text += ctx.t("price_item", title=s.title, price=tenant.price_str(s.price), duration=s.duration,
+                              masters=Raw(ctx.t("price_masters", masters=names)) if names else "")
+                if s.description:
+                    text += ctx.t("price_desc", description=s.description)
         addons = [a for a in tenant.addons() if any(c.addon_id == a.id for c in tenant.services.values())]
         if addons:
             text += ctx.t("prices_addons_header")
@@ -1191,9 +1204,12 @@ class BotApp:
         elif cmd == "book":
             await self.admin_book_services(ctx, None)
         elif cmd == "week":
-            await self.send_with_cancel(ctx, self.render_week(tenant, today), self._active_from(tenant, today, 7))
+            await self.send_list(ctx, *self.render_week(tenant, today))
         elif cmd == "all":
-            await self.send_with_cancel(ctx, self.render_upcoming(tenant, today), self._active_from(tenant, today))
+            text, numbered = self.render_upcoming(tenant, today)
+            cancelled = len(self.visible_cancelled(tenant, today))
+            clear = [[ibtn(ctx.at("btn_adm_clear_cancelled", count=cancelled), "aCc")]] if cancelled else []
+            await self.send_list(ctx, text, numbered, clear)
         elif cmd == "stats":
             await ctx.send(ctx.at("adm_stats", **compute_stats(ctx.db, tenant, self.settings)))
         elif cmd == "block":
@@ -1211,6 +1227,45 @@ class BotApp:
         elif cmd == "myid":
             await ctx.send(ctx.t("myid", id=ctx.user_id))
 
+    # ---------------------------------------------------------------- списки записів для адміна
+    @staticmethod
+    def _short_name(tenant: Tenant, row) -> str:
+        """Коротке ім'я клієнта для кнопки."""
+        keys = row.keys()
+        name = (row["client_name"] if "client_name" in keys else row["name"] if "name" in keys else None) \
+            or row["first_name"] or tenant.t(tenant.lang, "adm_client_noname")
+        return short(name, 16)
+
+    def _flags(self, r) -> str:
+        flags = ""
+        if r["client_confirmed"]:
+            flags += " ✅"
+        if r["source"] == "ai":
+            flags += " 🤖"
+        if r["source"] == "admin":
+            flags += " 📞"
+        if r["status"] == "no_show":
+            flags += " 🚫"
+        return flags
+
+    def _item(self, tenant: Tenant, n: int, r) -> str:
+        """Пронумерований запис у списку: номер, час, майстер, послуга, клієнт, коментар."""
+        text = tenant.t(tenant.lang, "adm_item", n=n, start=r["start_at"][11:16], end=r["end_at"][11:16],
+                        master=r["master_name"], service=r["service_title"],
+                        client=self.client_label(tenant, r), flags=self._flags(r))
+        if r["note"]:
+            text += tenant.t(tenant.lang, "adm_note_line", note=r["note"])
+        return text
+
+    def _booking_summary(self, tenant: Tenant, b, client) -> str:
+        """Запис одним блоком для підтверджень: день і час, майстер, послуга, клієнт."""
+        start = parse_dt(b["start_at"])
+        return tenant.t(tenant.lang, "adm_booking_summary", day=tenant.day_label(start.date(), tenant.lang),
+                        start=b["start_at"][11:16], end=b["end_at"][11:16], master=b["master_name"],
+                        service=b["service_title"],
+                        client=self.client_label(tenant, client) if client else tenant.t(tenant.lang,
+                                                                                        "adm_client_noname"))
+
     def render_day(self, tenant: Tenant, day: date, rows) -> str:
         lang = tenant.lang
         label = tenant.day_label(day, lang)
@@ -1218,28 +1273,17 @@ class BotApp:
             return tenant.t(lang, "adm_day_empty", day=label)
         active = [r for r in rows if r["status"] == "active"]
         text = tenant.t(lang, "adm_day_header", day=label, count=len(active))
-        for r in rows:
-            flags = ""
-            if r["client_confirmed"]:
-                flags += " ✅"
-            if r["source"] == "ai":
-                flags += " 🤖"
-            if r["source"] == "admin":
-                flags += " 📞"
-            if r["status"] == "no_show":
-                flags += " 🚫"
-            text += tenant.t(lang, "adm_booking_line", start=r["start_at"][11:16], end=r["end_at"][11:16],
-                             master=r["master_name"], service=r["service_title"],
-                             client=self.client_label(tenant, r), flags=flags, id=r["id"])
-            if r["note"]:
-                text += tenant.t(lang, "adm_note_line", note=r["note"])
+        for n, r in enumerate(rows, 1):
+            text += self._item(tenant, n, r)
         return text
 
     async def admin_day(self, ctx: Ctx, day: date, message_id: int | None) -> None:
         rows = ctx.booking.day_bookings(day)
         text = self.render_day(ctx.tenant, day, rows)
-        buttons = [[ibtn(f"🚫 #{r['id']}", f"ans:{r['id']}"), ibtn(f"🗑 #{r['id']}", f"acx:{r['id']}")]
-                   for r in rows if r["status"] == "active"]
+        now = dt_str(ctx.tenant.now())
+        buttons = [[ibtn(ctx.at("btn_adm_noshow_n", n=n), f"ans:{r['id']}"),
+                    ibtn(ctx.at("btn_adm_cancel_n", n=n), f"acx:{r['id']}")]
+                   for n, r in enumerate(rows, 1) if r["status"] == "active" and r["start_at"] > now]
         if buttons:
             text += ctx.at("adm_legend")
         await ctx.show(message_id, text, inline_kb(buttons) if buttons else None)
@@ -1251,51 +1295,70 @@ class BotApp:
         end = start + timedelta(days=days if days is not None else 3650)
         return self.db.bookings_between(tenant.slug, start, end, statuses)
 
-    def _render_by_day(self, tenant: Tenant, header: str, rows) -> str:
+    def _render_list(self, tenant: Tenant, header: str, rows) -> tuple[str, list[tuple[int, object]]]:
+        """Активні записи по днях з наскрізною нумерацією. Повертає текст і [(номер, запис)]."""
         lang = tenant.lang
         text = tenant.t(lang, header)
+        numbered = list(enumerate(rows, 1))
         by_day: dict[str, list] = {}
-        for r in rows:
-            by_day.setdefault(r["start_at"][:10], []).append(r)
-        for day_str, day_rows in by_day.items():
-            day = date.fromisoformat(day_str)
-            active = sum(1 for r in day_rows if r["status"] == "active")
-            text += tenant.t(lang, "adm_week_day", day=tenant.day_label(day, lang), count=active)
-            if active < len(day_rows):
-                text += tenant.t(lang, "adm_day_cancelled", count=len(day_rows) - active)
-            for r in day_rows:
-                text += tenant.t(lang, "adm_week_line", start=r["start_at"][11:16], master=r["master_name"],
-                                 service=r["service_title"], client=self.client_label(tenant, r))
-                if r["status"] == "cancelled":
-                    by = "admin" if r["cancelled_by"] == "admin" else "client"
-                    text += tenant.t(lang, f"adm_cancelled_by_{by}")
-                if r["note"]:
-                    text += tenant.t(lang, "adm_note_line", note=r["note"])
+        for n, r in numbered:
+            by_day.setdefault(r["start_at"][:10], []).append((n, r))
+        for day_str, items in by_day.items():
+            text += tenant.t(lang, "adm_list_day", day=tenant.day_label(date.fromisoformat(day_str), lang),
+                             count=len(items))
+            for n, r in items:
+                text += self._item(tenant, n, r)
         if not rows:
             text += tenant.t(lang, "adm_week_empty")
+        return text, numbered
+
+    def _render_cancelled(self, tenant: Tenant, rows) -> str:
+        """Скасовані — окремим блоком унизу, коротко, без номерів."""
+        lang = tenant.lang
+        text = tenant.t(lang, "adm_cancelled_header", count=len(rows))
+        for r in rows:
+            by = "admin" if r["cancelled_by"] == "admin" else "client"
+            text += tenant.t(lang, "adm_cancelled_item",
+                             day=tenant.day_label(date.fromisoformat(r["start_at"][:10]), lang),
+                             start=r["start_at"][11:16], master=r["master_name"], service=r["service_title"],
+                             client=self._short_name(tenant, r), by=tenant.t(lang, f"adm_cancelled_by_{by}"))
         return text
 
-    def render_week(self, tenant: Tenant, start_day: date) -> str:
-        text = self._render_by_day(tenant, "adm_week_header", self._active_from(tenant, start_day, 7))
+    def render_week(self, tenant: Tenant, start_day: date) -> tuple[str, list]:
+        text, numbered = self._render_list(tenant, "adm_week_header", self._active_from(tenant, start_day, 7))
         # Клієнти можуть записуватися далі ніж на тиждень (days_ahead) — не ховаємо ці записи мовчки.
         later = len(self._active_from(tenant, start_day + timedelta(days=7)))
         if later:
             text += tenant.t(tenant.lang, "adm_week_more", count=later)
-        return text
+        return text, numbered
 
-    def render_upcoming(self, tenant: Tenant, start_day: date) -> str:
-        rows = self._active_from(tenant, start_day, statuses=("active", "cancelled"))
-        return self._render_by_day(tenant, "adm_all_header", rows)
+    def visible_cancelled(self, tenant: Tenant, start_day: date) -> list:
+        """Скасовані записи від start_day, яких адмін ще не прибрав зі списку."""
+        return [r for r in self._active_from(tenant, start_day, statuses=("cancelled",)) if not r["cleared"]]
 
-    async def send_with_cancel(self, ctx: Ctx, text: str, rows) -> None:
-        """Список записів + кнопка 🗑 для кожного майбутнього активного (далі — як у /today)."""
-        now = dt_str(ctx.tenant.now())
-        buttons = [ibtn(f"🗑 {r['start_at'][8:10]}.{r['start_at'][5:7]} {r['start_at'][11:16]} #{r['id']}",
-                        f"acx:{r['id']}") for r in rows if r["status"] == "active" and r["start_at"] > now]
-        if not buttons:
-            await ctx.send(text)
-            return
-        await ctx.send(text + ctx.at("adm_cancel_hint"), inline_kb(_rows(buttons[:90], 2)))
+    def render_upcoming(self, tenant: Tenant, start_day: date) -> tuple[str, list]:
+        text, numbered = self._render_list(tenant, "adm_all_header", self._active_from(tenant, start_day))
+        cancelled = self.visible_cancelled(tenant, start_day)
+        if cancelled:
+            text += self._render_cancelled(tenant, cancelled)
+        return text, numbered
+
+    async def send_list(self, ctx: Ctx, text: str, numbered: list, extra_rows: list | None = None) -> None:
+        """Список + кнопка «🗑 номер · коли · клієнт» для кожного майбутнього запису."""
+        tenant = ctx.tenant
+        now = dt_str(tenant.now())
+        rows = []
+        for n, r in numbered:
+            if r["status"] != "active" or r["start_at"] <= now:
+                continue
+            when = f"{tenant.weekday_short(date.fromisoformat(r['start_at'][:10]), tenant.lang)} " \
+                   f"{r['start_at'][8:10]}.{r['start_at'][5:7]} {r['start_at'][11:16]}"
+            rows.append([ibtn(ctx.at("btn_adm_cancel_item", n=n, when=when, client=self._short_name(tenant, r)),
+                              f"acx:{r['id']}")])
+        if rows:
+            text += ctx.at("adm_list_hint")
+        rows = rows[:90] + (extra_rows or [])
+        await ctx.send(text, inline_kb(rows) if rows else None)
 
     # ---------------------------------------------------------------- запис клієнта адміністратором
     def _admin_master(self, ctx: Ctx, service_id: str, master_id: str):
@@ -1305,9 +1368,7 @@ class BotApp:
         return master
 
     async def admin_book_services(self, ctx: Ctx, message_id: int | None) -> None:
-        tenant = ctx.tenant
-        rows = [[ibtn(f"{s.title} · {tenant.price_str(s.price)}", f"aBs:{s.id}")]
-                for s in tenant.visible_services() if tenant.masters_for(s.id)]
+        rows = self.service_rows(ctx, "aBs")
         rows.append([ibtn(ctx.at("btn_adm_book_cancel"), "aBx")])
         await ctx.show(message_id, ctx.at("adm_book_service"), inline_kb(rows))
 
@@ -1589,16 +1650,17 @@ class BotApp:
             except BookingError:
                 raise Expired() from None
             await self.admin_day(ctx, parse_dt(b["start_at"]).date(), message_id)
-            return ctx.at("adm_noshow_done", id=b["id"])
+            return ctx.at("adm_noshow_done", client=self._short_name(tenant, ctx.db.get_client(b["client_id"])),
+                          time=b["start_at"][11:16])
         elif op == "acx" and len(a) == 1:
             b = ctx.db.get_booking(_int(a[0]))
             if b is None or b["tenant"] != tenant.slug or b["status"] != "active":
                 raise Expired()
             client = ctx.db.get_client(b["client_id"])
-            line = (f"{b['start_at'][8:10]}.{b['start_at'][5:7]} {b['start_at'][11:16]} · {b['master_name']} · "
-                    f"{b['service_title']} · {self.client_label(tenant, client)}")
+            offline = client is None or client["tg_id"] < 0
             kb = inline_kb([[ibtn(ctx.at("btn_adm_yes_cancel"), f"acy:{b['id']}"), ibtn(ctx.at("btn_no"), "ax")]])
-            await ctx.send(ctx.at("adm_cancel_ask", id=b["id"], line=line), kb)
+            await ctx.send(ctx.at("adm_cancel_ask", booking=Raw(self._booking_summary(tenant, b, client)),
+                                  who=Raw(ctx.at("adm_cancel_offline" if offline else "adm_cancel_notify"))), kb)
         elif op == "acy" and len(a) == 1:
             try:
                 b = ctx.booking.cancel(_int(a[0]), "admin")
@@ -1607,7 +1669,7 @@ class BotApp:
             client = ctx.db.get_client(b["client_id"])
             offline = client is None or client["tg_id"] < 0
             await ctx.show(message_id, ctx.at("adm_cancelled_done_offline" if offline else "adm_cancelled_done",
-                                              id=b["id"]))
+                                              booking=Raw(self._booking_summary(tenant, b, client))))
             if client and not offline and not client["blocked"]:
                 lang = client["lang"] or tenant.lang
                 start = parse_dt(b["start_at"])
@@ -1615,6 +1677,15 @@ class BotApp:
                     lang, "client_cancelled_by_admin", service=b["service_title"], master=b["master_name"],
                     day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
                 add_note(ctx.db, tenant, client["id"], f"Адміністратор скасував запис №{b['id']}.", self.settings)
+        elif op == "aCc":
+            count = len(self.visible_cancelled(tenant, tenant.today()))
+            if not count:
+                raise Expired()
+            kb = inline_kb([[ibtn(ctx.at("btn_adm_yes_clear"), "aCy"), ibtn(ctx.at("btn_no"), "ax")]])
+            await ctx.send(ctx.at("adm_clear_ask", count=count), kb)
+        elif op == "aCy":
+            count = ctx.db.clear_cancelled(tenant.slug, datetime.combine(tenant.today(), time.min))
+            await ctx.show(message_id, ctx.at("adm_cleared_done", count=count))
         elif op == "aBs":
             if a:
                 await self.admin_book_masters(ctx, a[0], message_id)

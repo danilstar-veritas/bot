@@ -296,6 +296,7 @@ class Service:
     duration: int
     price: float
     description: str = ""
+    group: str = ""  # розділ у списку послуг, наприклад «👨 Чоловічі»
     addon_for: list[str] = field(default_factory=list)  # до яких послуг цю можна додати
     # Прихована комбінація «послуга + додаток»: у списках не показується, записатися — лише через «➕ Додати».
     hidden: bool = False
@@ -416,6 +417,14 @@ class Tenant:
     def visible_services(self) -> list[Service]:
         """Послуги для списків (без прихованих комбінацій «послуга + додаток»)."""
         return [s for s in self.services.values() if not s.hidden]
+
+    def service_groups(self) -> list[tuple[str, list[Service]]]:
+        """Видимі послуги, на які можна записатися, по розділах (у порядку першої появи в налаштуваннях)."""
+        groups: dict[str, list[Service]] = {}
+        for s in self.visible_services():
+            if self.masters_for(s.id):
+                groups.setdefault(s.group, []).append(s)
+        return list(groups.items())
 
     def addons(self) -> list[Service]:
         """Послуги, які можна додати до інших (кнопкою «➕» на картці запису)."""
@@ -595,6 +604,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
             duration=ss.int("duration", 60, 5, 600),
             price=ss.num("price", 0),
             description=ss.str("description"),
+            group=ss.str("group"),
             addon_for=[str(x) for x in ss.list("addon_for")],
             hidden=ss.bool("addon_only", False),  # лише додатком до іншої послуги, окремо не записують
         )

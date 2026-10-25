@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from datetime import datetime
 
@@ -420,18 +421,24 @@ class AdminTests(BotTestCase):
         self.assertIn("Усі майбутні записи", upcoming)
         self.assertIn("27.10", upcoming)
         self.assertIn("06.11", upcoming)
-        # Скасовані — теж, з позначкою; у лічильнику дня лише активні.
-        self.assertIn("05.11</b> — 0 (скасовано: 1)", upcoming)
-        self.assertIn("❌ скасував клієнт", upcoming)
-        self.assertIn("06.11</b> — 1\n", upcoming)
-        self.assertNotIn("скасовано", week)  # /week — лише робочий розклад
+        # Дійсні — пронумеровані по днях, скасовані — окремим блоком унизу.
+        self.assertIn("<b>1. 12:00–13:00</b>", upcoming)
+        self.assertIn("<b>2. 12:00–13:00</b>", upcoming)
+        active_part, cancelled_part = upcoming.split("❌ <b>Скасовані</b> — 1")
+        self.assertIn("06.11", active_part)
+        self.assertNotIn("05.11", active_part)
+        self.assertIn("Чт, 05.11 12:00 · Андрій · Чоловіча стрижка · Іван — скасував клієнт", cancelled_part)
+        self.assertNotIn("Скасовані", week)  # /week — лише робочий розклад
         self.assertEqual(self.db.get_booking(far["id"])["status"], "active")
 
     async def test_admin_cancel_notifies_client(self):
         client = self.make_client()
         b = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")
         await self.send(cb(f"acx:{b['id']}", uid=ADMIN_ID))
-        self.assertIn(f"Скасувати запис #{b['id']}", self.tg.last(ADMIN_ID)["text"])
+        ask = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("Скасувати цей запис?", ask)
+        self.assertIn("<b>Завтра, вт 27.10, 12:00–13:00</b> · Андрій", ask)
+        self.assertIn("Клієнт отримає повідомлення", ask)
         await self.send(cb(f"acy:{b['id']}", uid=ADMIN_ID))
         self.assertEqual(self.db.get_booking(b["id"])["status"], "cancelled")
         self.assertIn("скасовано адміністратором", self.tg.last(CLIENT_ID)["text"])
@@ -659,7 +666,7 @@ class AdminBookingTests(BotTestCase):
         await self.send(cb(f"acy:{b['id']}", uid=ADMIN_ID))
         self.assertEqual(self.db.get_booking(b["id"])["status"], "cancelled")
         self.assertIn("скасовано адміністратором", self.tg.last(CLIENT_ID)["text"])
-        self.assertIn("клієнта повідомлено", self.tg.last(ADMIN_ID)["text"])
+        self.assertIn("Клієнта повідомлено", self.tg.last(ADMIN_ID)["text"])
 
 
 class ParseClientInfoTests(unittest.TestCase):
@@ -684,7 +691,9 @@ class AddonTests(BotTestCase):
         from .helpers import TOKEN
         root = Path(__file__).resolve().parent.parent
         text = (root / "config/tenants/demo-barbershop.toml").read_text(encoding="utf-8")
-        text = text.replace("ВСТАВТЕ_ТОКЕН_ВІД_BOTFATHER", TOKEN).replace("admins = []", f"admins = [{ADMIN_ID}]")
+        # Справжні токен і адміни (на сервері) підміняємо тестовими.
+        text = re.sub(r'(?m)^bot_token = ".*"$', f'bot_token = "{TOKEN}"', text)
+        text = re.sub(r"(?m)^admins = \[.*\]$", f"admins = [{ADMIN_ID}]", text)
         path = Path(tempfile.mkdtemp()) / "demo-barbershop.toml"
         path.write_text(text, encoding="utf-8")
         self.tenant = load_tenant(path)
@@ -738,6 +747,105 @@ class AddonTests(BotTestCase):
         self.assertIn("щойно зайняли", self.tg.last(CLIENT_ID)["text"])
         self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings WHERE client_id = ?", self.client()["id"]), 0)
 
+    async def test_service_list_grouped(self):
+        await self.send(msg(text="📅 Записатися"))
+        rows = [b["text"] for b in self.tg.buttons(self.tg.last(CLIENT_ID))]
+        self.assertEqual(rows[0], "━━ 👨 Чоловічі ━━")
+        women, kids = rows.index("━━ 👩 Жіночі ━━"), rows.index("━━ 🧒 Дитячі (до 8 років) ━━")
+        self.assertIn("Чоловіча стрижка · 600 грн", rows[1:women])
+        self.assertIn("Стрижка чубчика · 200 грн", rows[women:kids])
+        self.assertEqual(rows[kids + 1:], ["Дитяча стрижка для хлопчика (до 8 років) · 400 грн",
+                                           "Дитяча стрижка для дівчинки (до 8 років) · 500 грн"])
+        # Заголовок — не кнопка дії: нічого не відбувається і без «кнопка застаріла».
+        calls = len(self.tg.calls)
+        await self.send(cb("noop"))
+        self.assertEqual([m for m, _ in self.tg.calls[calls:]], ["answerCallbackQuery"])
+        self.assertIsNone(self.tg.calls[-1][1].get("text"))
+
+    async def test_prices_grouped(self):
+        await self.send(msg(text="💈 Послуги і ціни"))
+        text = self.tg.last(CLIENT_ID)["text"]
+        men, women, kids = (text.index(f"<b>{g}</b>") for g in ("👨 Чоловічі", "👩 Жіночі", "🧒 Дитячі (до 8 років)"))
+        self.assertLess(men, text.index("Стрижка машинкою"))
+        self.assertLess(text.index("Стрижка машинкою"), women)
+        self.assertLess(women, text.index("Стрижка чубчика"))
+        self.assertLess(text.index("Стрижка чубчика"), kids)
+        self.assertLess(kids, text.index("для дівчинки"))
+        self.assertEqual(text.count("━━━━━━━━━━━━"), 3)
+
+    async def test_admin_book_list_grouped(self):
+        await self.send(msg(uid=ADMIN_ID, text="/book"))
+        rows = [(b["text"], b["callback_data"]) for b in self.tg.buttons(self.tg.last(ADMIN_ID))]
+        self.assertEqual(rows[0], ("━━ 👨 Чоловічі ━━", "noop"))
+        self.assertIn(("Дитяча стрижка для дівчинки (до 8 років) · 500 грн", "aBs:kids_girl"), rows)
+
     async def test_addon_button_rejects_plain_service(self):
         await self.send(cb("ba:haircut:oleg:20261027:1200"))  # не комбінація — застаріла кнопка
         self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 0)
+
+
+
+class AdminListTests(BotTestCase):
+    """Списки записів для адміна: нумерація, кнопки з номером, скасовані внизу, очищення."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.ivan = self.make_client()
+        self.olena = self.db.create_offline_client(self.slug, "Олена", "+380671234567", self.tenant.now())
+        self.b1 = self.booking.create(self.ivan["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")
+        self.b2 = self.booking.create(self.olena["id"], "haircut", "andriy", datetime(2026, 10, 27, 14, 0), "admin")
+        self.b3 = self.booking.create(self.ivan["id"], "haircut", "andriy", datetime(2026, 11, 3, 10, 0), "buttons")
+        self.booking.cancel(self.b3["id"], "client")
+
+    def buttons(self):
+        return [(b["text"], b["callback_data"]) for b in self.tg.buttons(self.tg.last(ADMIN_ID))]
+
+    async def test_all_numbers_match_buttons(self):
+        await self.send(msg(uid=ADMIN_ID, text="/all"))
+        text = self.tg.last(ADMIN_ID)["text"]
+        self.assertLess(text.index("<b>1. 12:00–13:00</b>"), text.index("<b>2. 14:00–15:00</b>"))
+        self.assertLess(text.index("👤 Олена"), text.index("❌ <b>Скасовані</b>"))
+        self.assertEqual(self.buttons(), [
+            ("🗑 1 · вт 27.10 12:00 · Іван", f"acx:{self.b1['id']}"),
+            ("🗑 2 · вт 27.10 14:00 · Олена", f"acx:{self.b2['id']}"),
+            ("🧹 Прибрати скасовані (1)", "aCc"),
+        ])
+
+    async def test_today_buttons_numbered(self):
+        set_time(2026, 10, 27, 9, 0)
+        await self.send(msg(uid=ADMIN_ID, text="/today"))
+        text = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("<b>1. 12:00–13:00</b>", text)
+        self.assertIn("<b>2. 14:00–15:00</b>", text)
+        self.assertEqual(self.buttons(), [
+            ("🚫 1 не прийшов", f"ans:{self.b1['id']}"), ("🗑 1 скасувати", f"acx:{self.b1['id']}"),
+            ("🚫 2 не прийшов", f"ans:{self.b2['id']}"), ("🗑 2 скасувати", f"acx:{self.b2['id']}"),
+        ])
+
+    async def test_cancel_offline_client_is_explained_upfront(self):
+        await self.send(cb(f"acx:{self.b2['id']}", uid=ADMIN_ID))
+        ask = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("👤 Олена · +380671234567", ask)
+        self.assertIn("Клієнта немає в Telegram", ask)
+
+    async def test_clear_cancelled(self):
+        await self.send(cb("aCc", uid=ADMIN_ID))
+        self.assertIn("Прибрати скасовані записи зі списку (1)?", self.tg.last(ADMIN_ID)["text"])
+        await self.send(cb("aCy", uid=ADMIN_ID))
+        self.assertIn("Прибрано скасованих записів: 1", self.tg.last(ADMIN_ID)["text"])
+        await self.send(msg(uid=ADMIN_ID, text="/all"))
+        self.assertNotIn("Скасовані", self.tg.last(ADMIN_ID)["text"])
+        self.assertNotIn("aCc", [d for _, d in self.buttons()])
+        # Запис лишився в базі як скасований — статистика не змінюється.
+        self.assertEqual(self.db.get_booking(self.b3["id"])["status"], "cancelled")
+        await self.send(msg(uid=ADMIN_ID, text="/stats"))
+        self.assertIn("скасовано: 1", self.tg.last(ADMIN_ID)["text"])
+
+    async def test_new_cancellation_shows_again_after_clear(self):
+        self.db.clear_cancelled(self.slug, datetime(2026, 10, 26))
+        self.booking.cancel(self.b1["id"], "admin")
+        await self.send(msg(uid=ADMIN_ID, text="/all"))
+        text = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("❌ <b>Скасовані</b> — 1", text)
+        self.assertIn("Іван — скасував адмін", text)
+        self.assertIn("<b>1. 14:00–15:00</b>", text)  # нумерація лише по дійсних

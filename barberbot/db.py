@@ -132,6 +132,8 @@ class DB:
         columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(bookings)")}
         if "note" not in columns:
             self.conn.execute("ALTER TABLE bookings ADD COLUMN note TEXT")
+        if "cleared" not in columns:  # скасований запис, який адмін прибрав зі списку /all
+            self.conn.execute("ALTER TABLE bookings ADD COLUMN cleared INTEGER NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         self.conn.close()
@@ -246,6 +248,12 @@ class DB:
             "SELECT * FROM bookings WHERE client_id = ? AND status = 'active' AND start_at > ? ORDER BY start_at",
             client_id, dt_str(now),
         )
+
+    def clear_cancelled(self, tenant: str, since: datetime) -> int:
+        """Прибрати зі списку /all скасовані записи від since. Записи лишаються в базі (і в статистиці)."""
+        return self.conn.execute(
+            "UPDATE bookings SET cleared = 1 WHERE tenant = ? AND status = 'cancelled' AND cleared = 0 "
+            "AND start_at >= ?", (tenant, dt_str(since))).rowcount
 
     def update_booking_status(self, booking_id: int, status: str, by: str | None, now: datetime) -> None:
         self.conn.execute(

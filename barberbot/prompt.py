@@ -81,7 +81,8 @@ def static_prompt(tenant: Tenant) -> str:
     data = ["## Дані закладу", *_info_lines(tenant), "", "Послуги (id: назва — тривалість — ціна — хто виконує):"]
     for s in tenant.visible_services():
         names = ", ".join(m.name for m in tenant.masters_for(s.id)) or "ніхто (запис недоступний)"
-        line = f"- {s.id}: {s.title} — {s.duration} хв — {tenant.price_str(s.price)} — {names}."
+        group = f"[{s.group}] " if s.group else ""
+        line = f"- {s.id}: {group}{s.title} — {s.duration} хв — {tenant.price_str(s.price)} — {names}."
         if s.description:
             line += f" {s.description}"
         data.append(line)
