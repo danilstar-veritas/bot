@@ -36,8 +36,10 @@ class ConfigTests(unittest.TestCase):
         text = (ROOT / "config/tenants/demo-barbershop.toml").read_text(encoding="utf-8")
         text = text.replace("ВСТАВТЕ_ТОКЕН_ВІД_BOTFATHER", TOKEN).replace("admins = []", "admins = [42]")
         t = load_tenant(write_toml(text, "demo.toml"))
-        self.assertEqual(len(t.services), 5)
+        self.assertEqual(len(t.services), 11)
         self.assertEqual(list(t.masters), ["andriy", "oleg"])
+        self.assertIn("women_long", t.masters["andriy"].services)  # services = ["*"]
+        self.assertNotIn("women_long", t.masters["oleg"].services)
         self.assertEqual(t.masters["oleg"].schedule[0], [])  # пн — вихідний
         self.assertEqual(len(t.masters["oleg"].schedule[6]), 1)  # нд — 11-17
         self.assertNotIn("kids", t.masters["oleg"].services)

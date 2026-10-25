@@ -141,6 +141,48 @@ duration = 30
 price = 350
 
 
+[[services]]
+id = "women_short"
+title = "Жіноча стрижка (коротке волосся)"
+duration = 60
+price = 700
+description = "Волосся до підборіддя. Миття і укладання входять у вартість."
+
+[[services]]
+id = "women_medium"
+title = "Жіноча стрижка (середнє волосся)"
+duration = 90
+price = 850
+description = "Волосся до плечей. Миття і укладання входять у вартість."
+
+[[services]]
+id = "women_long"
+title = "Жіноча стрижка (довге волосся)"
+duration = 90
+price = 950
+description = "Волосся нижче плечей. Миття і укладання входять у вартість."
+
+[[services]]
+id = "pixie"
+title = "Жіноча стрижка піксі / андеркат"
+duration = 60
+price = 750
+description = "Коротка модельна стрижка, можна з вистриганням машинкою."
+
+[[services]]
+id = "trim_ends"
+title = "Підрівнювання кінчиків"
+duration = 30
+price = 400
+description = "Освіжити форму без зміни довжини."
+
+[[services]]
+id = "bangs"
+title = "Стрижка чубчика"
+duration = 30
+price = 200
+
+
 # ── Майстри ──────────────────────────────────────────────────────────
 # services = ["*"] — робить усі послуги; або перелік id: ["haircut", "beard"].
 # [masters.schedule] — лише ті дні, що відрізняються від загального графіка.
