@@ -156,7 +156,13 @@ class ClientButtonsTests(BotTestCase):
         await self.send(msg(text="🗓 Мої записи"))
         listing = self.tg.last(CLIENT_ID)
         self.assertIn("Завтра, вт 27.10 о 12:00", listing["text"])
+        self.assertTrue(listing["text"].startswith("✨ <b>Ваші записи</b> ✨"))
+        self.assertIn("✂️ Чоловіча стрижка\n💈 Майстер: Андрій", listing["text"])
+        self.assertIn("💛 Ми вже чекаємо на вас!", listing["text"])
         self.assertEqual([x["callback_data"] for x in self.tg.buttons(listing)], [f"rd:{b['id']}", f"cx:{b['id']}"])
+        # Кожна кнопка в окремому рядку, щоб на телефоні текст не обрізався.
+        self.assertEqual([[x["text"] for x in row] for row in listing["reply_markup"]["inline_keyboard"]],
+                         [["🔁 Перенести 27.10 12:00"], ["❌ Скасувати 27.10 12:00"]])
 
         await self.send(cb(f"rd:{b['id']}"))
         await self.send(cb(f"rt:{b['id']}:20261028"))
@@ -708,7 +714,7 @@ class AddonTests(BotTestCase):
     async def test_wash_addon(self):
         await self.send(cb("bt:women_long:olena:20261027:1200"))
         self.assertEqual(self.card_buttons().get("ba:women_long+wash:olena:20261027:1200"),
-                         "➕ Миття голови (+15 хв, +150 грн)")
+                         "➕ 🚿 Миття голови (+15 хв, +150 грн)")
         await self.send(cb("ba:women_long+wash:olena:20261027:1200"))
         card = self.tg.last(CLIENT_ID)["text"]
         self.assertIn("Жіноча стрижка (довге волосся) + Миття голови", card)
@@ -735,7 +741,7 @@ class AddonTests(BotTestCase):
         await self.send(msg(text="💈 Послуги і ціни"))
         prices = self.tg.last(CLIENT_ID)["text"]
         self.assertIn("Можна додати до стрижки", prices)
-        self.assertIn("Миття голови — +150 грн, +15 хв", prices)
+        self.assertIn("🚿 Миття голови — +150 грн, +15 хв", prices)
         self.assertNotIn("Чоловіча стрижка + Миття голови", prices)
         self.assertNotIn("Миття і укладання входять", prices)
 
@@ -747,37 +753,120 @@ class AddonTests(BotTestCase):
         self.assertIn("щойно зайняли", self.tg.last(CLIENT_ID)["text"])
         self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings WHERE client_id = ?", self.client()["id"]), 0)
 
-    async def test_service_list_grouped(self):
+    def kb(self, chat_id=CLIENT_ID):
+        return [(b["text"], b["callback_data"]) for b in self.tg.buttons(self.tg.last(chat_id))]
+
+    async def test_category_first_then_services(self):
         await self.send(msg(text="📅 Записатися"))
-        rows = [b["text"] for b in self.tg.buttons(self.tg.last(CLIENT_ID))]
-        self.assertEqual(rows[0], "━━ 👨 Чоловічі ━━")
-        women, kids = rows.index("━━ 👩 Жіночі ━━"), rows.index("━━ 🧒 Дитячі (до 8 років) ━━")
-        self.assertIn("Чоловіча стрижка · 600 грн", rows[1:women])
-        self.assertIn("Стрижка чубчика · 200 грн", rows[women:kids])
-        self.assertEqual(rows[kids + 1:], ["Дитяча стрижка для хлопчика (до 8 років) · 400 грн",
-                                           "Дитяча стрижка для дівчинки (до 8 років) · 500 грн"])
-        # Заголовок — не кнопка дії: нічого не відбувається і без «кнопка застаріла».
-        calls = len(self.tg.calls)
-        await self.send(cb("noop"))
-        self.assertEqual([m for m, _ in self.tg.calls[calls:]], ["answerCallbackQuery"])
-        self.assertIsNone(self.tg.calls[-1][1].get("text"))
+        first = self.tg.last(CLIENT_ID)["text"]
+        self.assertTrue(first.endswith("Оберіть категорію 👇"))
+        # Під кожною категорією — що в неї входить (довгі рядки розтягують вікно, і кнопки не обрізаються).
+        self.assertIn("<b>👦 Хлопчики (до 8 років)</b>\nМаленький джентльмен, Бешкетник під машинку", first)
+        self.assertEqual(self.kb(), [("👨 Чоловічі", "bg:0"), ("👩 Жіночі", "bg:1"),
+                                     ("👦 Хлопчики (до 8 років)", "bg:2"), ("👧 Дівчатка (до 8 років)", "bg:3")])
+
+        await self.send(cb("bg:2"))
+        boys = self.tg.last(CLIENT_ID)["text"]
+        self.assertTrue(boys.startswith("<b>👦 Хлопчики (до 8 років)</b>\n\n<b>👦 Маленький джентльмен</b> — 400 грн, 45 хв"))
+        self.assertIn("<i>Дитяча стрижка машинкою для хлопчиків до 8 років.</i>", boys)
+        self.assertTrue(boys.endswith("Оберіть послугу 👇"))
+        self.assertEqual(self.kb(), [("👦 Маленький джентльмен · 400 грн", "bs:kids_boy"),
+                                     ("🪒 Бешкетник під машинку · 250 грн", "bs:kids_buzz"), ("⬅️ Назад", "bs")])
+        await self.send(cb("bg:3"))
+        girls = self.kb()
+        self.assertEqual([d for _, d in girls], ["bs:kids_girl", "bs:kids_girl_long", "bs:kids_ends", "bs:kids_bangs",
+                                                 "bs"])
+        # Дитячі підписи короткі, щоб на телефоні не обрізались.
+        self.assertTrue(all(len(t) <= 35 for t, _ in girls))
+        # Дівчаток стрижуть лише майстрині.
+        await self.send(cb("bs:kids_girl"))
+        self.assertEqual([d for _, d in self.kb()], ["bm:kids_girl:olena", "bm:kids_girl:maryna", "bm:kids_girl:any",
+                                                     "bg:3"])
+
+        await self.send(cb("bg:1"))
+        women = [d for _, d in self.kb()]
+        self.assertEqual(len(women), 7)  # 6 послуг + «Назад»
+        self.assertNotIn("bs:haircut", women)
+
+        # «Назад» з вибору майстра веде до розділу послуги, а з розділу — до категорій.
+        await self.send(cb("bs:women_long"))
+        self.assertEqual(self.kb()[-1], ("⬅️ Назад", "bg:1"))
+        await self.send(cb("bs"))
+        self.assertTrue(self.tg.last(CLIENT_ID)["text"].endswith("Оберіть категорію 👇"))
+
+    async def test_stale_category_button(self):
+        await self.send(cb("bg:7"))
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 0)
+        self.assertIn("неактуальна", self.tg.of("answerCallbackQuery")[-1]["text"])
 
     async def test_prices_grouped(self):
         await self.send(msg(text="💈 Послуги і ціни"))
         text = self.tg.last(CLIENT_ID)["text"]
-        men, women, kids = (text.index(f"<b>{g}</b>") for g in ("👨 Чоловічі", "👩 Жіночі", "🧒 Дитячі (до 8 років)"))
+        men, women, boys, girls = (text.index(f"<b>{g}</b>") for g in (
+            "👨 Чоловічі", "👩 Жіночі", "👦 Хлопчики (до 8 років)", "👧 Дівчатка (до 8 років)"))
         self.assertLess(men, text.index("Стрижка машинкою"))
         self.assertLess(text.index("Стрижка машинкою"), women)
         self.assertLess(women, text.index("Стрижка чубчика"))
-        self.assertLess(text.index("Стрижка чубчика"), kids)
-        self.assertLess(kids, text.index("для дівчинки"))
-        self.assertEqual(text.count("━━━━━━━━━━━━"), 3)
+        self.assertLess(text.index("Стрижка чубчика"), boys)
+        self.assertLess(boys, text.index("Бешкетник під машинку"))
+        self.assertLess(text.index("Бешкетник під машинку"), girls)
+        self.assertLess(girls, text.index("Довгокоса принцеса"))
+        self.assertIn("Дитяча стрижка на довге волосся для дівчаток до 8 років.", text)
+        self.assertEqual(text.count("━━━━━━━━━━━━"), 4)
 
-    async def test_admin_book_list_grouped(self):
+    async def test_icons_only_in_lists(self):
+        await self.send(msg(text="💈 Послуги і ціни"))
+        self.assertIn("<b>🪒 Стрижка машинкою</b>", self.tg.last(CLIENT_ID)["text"])
+        # У картці, записі й підтвердженні — назва без смайлика.
+        await self.send(cb("bt:buzz:oleg:20261027:1200"))
+        self.assertIn("💈 Стрижка машинкою\n", self.tg.last(CLIENT_ID)["text"])
+        await self.send(cb("bc:buzz:oleg:20261027:1200"))
+        self.assertEqual(self.db.q("SELECT service_title FROM bookings")[0][0], "Стрижка машинкою")
+
+    async def test_prices_without_masters_contacts_with_masters(self):
+        await self.send(msg(text="💈 Послуги і ціни"))
+        prices = self.tg.last(CLIENT_ID)["text"]
+        for name in ("Андрій", "Олег", "Олена", "Марина"):
+            self.assertNotIn(name, prices)
+
+        await self.send(msg(text="📍 Контакти"))
+        text = self.tg.last(CLIENT_ID)["text"]
+        info, masters = text.split("👥 <b>Наші майстри</b>")
+        self.assertIn("Хрещатик", info)
+        self.assertLess(masters.index("<b>Андрій</b>"), masters.index("<b>Марина</b>"))
+        # Майстер — це ім'я, легенда і графік; хто що робить, тут не пишемо.
+        olena = masters[masters.index("<b>Олена</b>"):masters.index("<b>Марина</b>")]
+        self.assertIn("<i>Мріяла стати скульпторкою", olena)
+        self.assertIn("🗓 Пн–пт: 10:00–20:00; Сб: 10:00–18:00; Нд: вихідний", olena)
+        oleg = masters[masters.index("<b>Олег</b>"):masters.index("<b>Олена</b>")]
+        self.assertIn("Пн: вихідний", oleg)
+        for word in ("Чоловічі", "Жіночі", "Діти", "Хлопчики", "усі послуги", "Тільки", "Миття"):
+            self.assertNotIn(word, masters)
+
+    async def test_my_bookings_footer_from_tenant_texts(self):
+        # У демо-барбершопі кінець «Мої записи» — свій, з кавою і PlayStation (з [texts.uk]).
+        self.booking.create(self.client()["id"], "haircut", "oleg", datetime(2026, 10, 27, 12, 0), "buttons")
+        await self.send(msg(text="🗓 Мої записи"))
+        text = self.tg.last(CLIENT_ID)["text"]
+        self.assertIn("Майстер: Олег\n\n☕ Ми вже чекаємо на вас! Кава чи чай — за наш рахунок", text)
+        self.assertTrue(text.endswith("кнопками нижче 👇"))
+
+    async def test_my_bookings_empty_is_friendly(self):
+        await self.send(msg(text="🗓 Мої записи"))
+        empty = self.tg.last(CLIENT_ID)
+        self.assertIn("Саме час це виправити", empty["text"])
+        self.assertEqual([b["callback_data"] for b in self.tg.buttons(empty)], ["menu:book"])
+
+    async def test_admin_book_category_first(self):
         await self.send(msg(uid=ADMIN_ID, text="/book"))
-        rows = [(b["text"], b["callback_data"]) for b in self.tg.buttons(self.tg.last(ADMIN_ID))]
-        self.assertEqual(rows[0], ("━━ 👨 Чоловічі ━━", "noop"))
-        self.assertIn(("Дитяча стрижка для дівчинки (до 8 років) · 500 грн", "aBs:kids_girl"), rows)
+        self.assertIn("Оберіть категорію", self.tg.last(ADMIN_ID)["text"])
+        self.assertEqual(self.kb(ADMIN_ID)[0], ("👨 Чоловічі", "aBg:0"))
+        self.assertEqual(self.kb(ADMIN_ID)[-1], ("✖️ Скасувати", "aBx"))
+        await self.send(cb("aBg:3", uid=ADMIN_ID))
+        self.assertIn(("👧 Маленька принцеса · 450 грн", "aBs:kids_girl"), self.kb(ADMIN_ID))
+        await self.send(cb("aBs:kids_girl", uid=ADMIN_ID))
+        self.assertEqual(self.kb(ADMIN_ID), [("Олена", "aBm:kids_girl:olena"), ("Марина", "aBm:kids_girl:maryna"),
+                                             ("⬅️ Назад", "aBg:3")])
 
     async def test_addon_button_rejects_plain_service(self):
         await self.send(cb("ba:haircut:oleg:20261027:1200"))  # не комбінація — застаріла кнопка

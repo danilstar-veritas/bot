@@ -297,11 +297,17 @@ class Service:
     price: float
     description: str = ""
     group: str = ""  # розділ у списку послуг, наприклад «👨 Чоловічі»
+    icon: str = ""  # смайлик перед назвою у списках послуг і цін (у самих записах назва — без нього)
     addon_for: list[str] = field(default_factory=list)  # до яких послуг цю можна додати
     # Прихована комбінація «послуга + додаток»: у списках не показується, записатися — лише через «➕ Додати».
     hidden: bool = False
     base_id: str = ""
     addon_id: str = ""
+
+    @property
+    def label(self) -> str:
+        """Назва для списків: зі смайликом, якщо він заданий."""
+        return f"{self.icon} {self.title}" if self.icon else self.title
 
 
 @dataclass
@@ -605,6 +611,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
             price=ss.num("price", 0),
             description=ss.str("description"),
             group=ss.str("group"),
+            icon=ss.str("icon"),
             addon_for=[str(x) for x in ss.list("addon_for")],
             hidden=ss.bool("addon_only", False),  # лише додатком до іншої послуги, окремо не записують
         )

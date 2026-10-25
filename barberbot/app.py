@@ -746,8 +746,6 @@ class BotApp:
             if not ctx.is_admin:
                 return ctx.t("alert_no_access")
             return await self.admin_callback(ctx, op, a, message_id)
-        if op == "noop":
-            return None
         if op == "menu":
             if a == ["book"]:
                 await self.flow_services(ctx, message_id)
@@ -759,6 +757,8 @@ class BotApp:
                 await self.flow_masters(ctx, a[0], message_id)
             else:
                 await self.flow_services(ctx, message_id)
+        elif op == "bg" and len(a) == 1:
+            await self.flow_group(ctx, _int(a[0]), message_id)
         elif op == "bm" and len(a) == 2:
             await self.flow_days(ctx, a[0], a[1], message_id)
         elif op == "bd" and len(a) == 3:
@@ -824,20 +824,67 @@ class BotApp:
             raise Expired()
         return master.name
 
-    def service_rows(self, ctx: Ctx, prefix: str) -> list[list[dict]]:
-        """Кнопки послуг по розділах; заголовок розділу — кнопка, що нічого не робить."""
+    # Вибір послуги: якщо в закладі кілька розділів (group), спершу розділ, потім послуги лише з нього.
+    # prefix — callback вибору послуги ("bs" / "aBs"), group_prefix — вибору розділу ("bg" / "aBg").
+    def _service_buttons(self, ctx: Ctx, services, prefix: str) -> list[list[dict]]:
         tenant = ctx.tenant
-        groups = tenant.service_groups()
-        rows = []
-        for group, services in groups:
-            if group and len(groups) > 1:
-                rows.append([ibtn(ctx.t("btn_group_header", group=group), "noop")])
-            rows += [[ibtn(ctx.t("btn_service", title=s.title, price=tenant.price_str(s.price)), f"{prefix}:{s.id}")]
-                     for s in services]
-        return rows
+        return [[ibtn(ctx.t("btn_service", title=s.label, price=tenant.price_str(s.price)), f"{prefix}:{s.id}")]
+                for s in services]
+
+    @staticmethod
+    def _has_groups(groups) -> bool:
+        return sum(1 for g, _ in groups if g) > 1
+
+    def service_menu(self, ctx: Ctx, prefix: str, group_prefix: str) -> tuple[bool, list[list[dict]]]:
+        """Перший екран: (чи це розділи, кнопки). Без розділів — одразу всі послуги."""
+        groups = ctx.tenant.service_groups()
+        if not self._has_groups(groups):
+            return False, self._service_buttons(ctx, [s for _, ss in groups for s in ss], prefix)
+        rows = [[ibtn(g, f"{group_prefix}:{i}")] for i, (g, _) in enumerate(groups) if g]
+        return True, rows + self._service_buttons(ctx, [s for g, ss in groups if not g for s in ss], prefix)
+
+    def group_menu(self, ctx: Ctx, index: int, prefix: str, back: str) -> tuple[str, str, list[list[dict]]]:
+        """Розділ: (назва, опис послуг для тексту повідомлення, кнопки послуг + «Назад»)."""
+        groups = ctx.tenant.service_groups()
+        if not 0 <= index < len(groups) or not groups[index][0]:
+            raise Expired()
+        group, services = groups[index]
+        return group, self._services_text(ctx, services), \
+            self._service_buttons(ctx, services, prefix) + [[ibtn(ctx.t("btn_back"), back)]]
+
+    # Ширина кнопок у Telegram дорівнює ширині повідомлення над ними: короткий текст — вузькі кнопки
+    # з обрізаними підписами. Тому над кнопками — перелік послуг з описами (і довгі рядки розтягують вікно).
+    def _services_text(self, ctx: Ctx, services) -> str:
+        tenant = ctx.tenant
+        text = ""
+        for s in services:
+            text += ctx.t("svc_line", title=s.label, price=tenant.price_str(s.price), duration=s.duration)
+            if s.description:
+                text += ctx.t("svc_desc", description=s.description)
+        return text
+
+    def _groups_text(self, ctx: Ctx) -> str:
+        return "".join(ctx.t("group_line", group=g, services=", ".join(s.title for s in ss))
+                       for g, ss in ctx.tenant.service_groups() if g)
+
+    def _group_back(self, ctx: Ctx, service_id: str, menu: str, group_prefix: str) -> str:
+        """«Назад» від послуги: до її розділу, якщо розділи є, інакше — до списку послуг."""
+        groups = ctx.tenant.service_groups()
+        if self._has_groups(groups):
+            for i, (g, services) in enumerate(groups):
+                if g and any(s.id == service_id for s in services):
+                    return f"{group_prefix}:{i}"
+        return menu
 
     async def flow_services(self, ctx: Ctx, message_id: int | None) -> None:
-        await ctx.show(message_id, ctx.t("choose_service"), inline_kb(self.service_rows(ctx, "bs")))
+        grouped, rows = self.service_menu(ctx, "bs", "bg")
+        text = ctx.t("choose_group", groups=Raw(self._groups_text(ctx))) if grouped else ctx.t("choose_service")
+        await ctx.show(message_id, text, inline_kb(rows))
+
+    async def flow_group(self, ctx: Ctx, index: int, message_id: int | None) -> None:
+        group, services, rows = self.group_menu(ctx, index, "bs", "bs")
+        await ctx.show(message_id, ctx.t("choose_service_in_group", group=group, services=Raw(services)),
+                       inline_kb(rows))
 
     async def flow_masters(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
         service = self._service(ctx, service_id)
@@ -847,11 +894,13 @@ class BotApp:
             return
         rows = _rows([ibtn(m.name, f"bm:{service_id}:{m.id}") for m in masters], 2)
         rows.append([ibtn(ctx.t("btn_any_master"), f"bm:{service_id}:any")])
-        rows.append([ibtn(ctx.t("btn_back"), "bs")])
+        rows.append([ibtn(ctx.t("btn_back"), self._group_back(ctx, service_id, "bs", "bg"))])
         await ctx.show(message_id, ctx.t("choose_master", service=service.title), inline_kb(rows))
 
     def _back_to_masters(self, ctx: Ctx, service_id: str) -> str:
-        return "bs" if len(ctx.tenant.masters_for(service_id)) <= 1 else f"bs:{service_id}"
+        if len(ctx.tenant.masters_for(service_id)) <= 1:
+            return self._group_back(ctx, service_id, "bs", "bg")
+        return f"bs:{service_id}"
 
     async def flow_days(self, ctx: Ctx, service_id: str, master_sel: str, message_id: int | None,
                         prefix: str = "") -> None:
@@ -907,7 +956,7 @@ class BotApp:
         rows = [[ibtn(ctx.t("btn_confirm"), f"bc:{service_id}:{resolved}:{start:%Y%m%d}:{start:%H%M}")]]
         for combo in tenant.addons_for(service_id, resolved):
             addon = tenant.services[combo.addon_id]
-            label = ctx.t("btn_add_addon", title=addon.title, duration=addon.duration,
+            label = ctx.t("btn_add_addon", title=addon.label, duration=addon.duration,
                           price=tenant.price_str(addon.price))
             rows.append([ibtn(label, f"ba:{combo.id}:{resolved}:{start:%Y%m%d}:{start:%H%M}")])
         rows.append([ibtn(ctx.t("btn_other_time"), f"bd:{service_id}:{master_sel}:{start:%Y%m%d}")])
@@ -983,8 +1032,10 @@ class BotApp:
             text += ctx.t("my_item", day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start),
                           service=b["service_title"], master=b["master_name"])
             label = f"{start:%d.%m} {fmt_hhmm(start)}"
-            buttons.append([ibtn(ctx.t("btn_resched_item", short=label), f"rd:{b['id']}"),
-                            ibtn(ctx.t("btn_cancel_item", short=label), f"cx:{b['id']}")])
+            # Кожна кнопка — окремим рядком: удвох в одному рядку текст на телефоні обрізається.
+            buttons.append([ibtn(ctx.t("btn_resched_item", short=label), f"rd:{b['id']}")])
+            buttons.append([ibtn(ctx.t("btn_cancel_item", short=label), f"cx:{b['id']}")])
+        text += ctx.t("my_footer")
         await ctx.show(message_id, text, inline_kb(buttons))
 
     async def show_prices(self, ctx: Ctx) -> None:
@@ -995,17 +1046,14 @@ class BotApp:
             if group and len(groups) > 1:
                 text += ctx.t("price_group", group=group)
             for s in services:
-                masters = tenant.masters_for(s.id)
-                names = ", ".join(m.name for m in masters) if len(tenant.masters) > 1 else ""
-                text += ctx.t("price_item", title=s.title, price=tenant.price_str(s.price), duration=s.duration,
-                              masters=Raw(ctx.t("price_masters", masters=names)) if names else "")
+                text += ctx.t("price_item", title=s.label, price=tenant.price_str(s.price), duration=s.duration)
                 if s.description:
                     text += ctx.t("price_desc", description=s.description)
         addons = [a for a in tenant.addons() if any(c.addon_id == a.id for c in tenant.services.values())]
         if addons:
             text += ctx.t("prices_addons_header")
             for a in addons:
-                text += ctx.t("price_addon_item", title=a.title, price=tenant.price_str(a.price), duration=a.duration)
+                text += ctx.t("price_addon_item", title=a.label, price=tenant.price_str(a.price), duration=a.duration)
         await ctx.send(text, inline_kb([[ibtn(ctx.t("btn_book"), "menu:book")]]))
 
     async def show_contacts(self, ctx: Ctx) -> None:
@@ -1021,11 +1069,22 @@ class BotApp:
             text += ctx.t("contacts_directions", directions=info["directions"])
         if info.get("payment"):
             text += ctx.t("contacts_payment", payment=info["payment"])
+        if tenant.masters:
+            text += ctx.t("contacts_masters_header")
+            for m in tenant.masters.values():
+                text += self._master_card(ctx, m)
         rows = []
         if info.get("maps_url"):
             rows.append([url_btn(ctx.t("btn_map"), info["maps_url"])])
         rows.append([ibtn(ctx.t("btn_book"), "menu:book")])
         await ctx.send(text, inline_kb(rows))
+
+    def _master_card(self, ctx: Ctx, master) -> str:
+        """Майстер у «Контактах»: ім'я, легенда (about) і графік."""
+        schedule = ctx.tenant.schedule_summary(ctx.lang, master).replace("\n", "; ")
+        return ctx.t("contacts_master", name=master.name,
+                     about=Raw(ctx.t("contacts_master_about", about=master.about)) if master.about else "",
+                     schedule=schedule)
 
     # ---------------------------------------------------------------- скасування
     def _booking_texts(self, ctx: Ctx, b) -> dict:
@@ -1368,14 +1427,19 @@ class BotApp:
         return master
 
     async def admin_book_services(self, ctx: Ctx, message_id: int | None) -> None:
-        rows = self.service_rows(ctx, "aBs")
+        grouped, rows = self.service_menu(ctx, "aBs", "aBg")
         rows.append([ibtn(ctx.at("btn_adm_book_cancel"), "aBx")])
-        await ctx.show(message_id, ctx.at("adm_book_service"), inline_kb(rows))
+        text = ctx.at("adm_book_group", groups=Raw(self._groups_text(ctx))) if grouped else ctx.at("adm_book_service")
+        await ctx.show(message_id, text, inline_kb(rows))
+
+    async def admin_book_group(self, ctx: Ctx, index: int, message_id: int | None) -> None:
+        group, services, rows = self.group_menu(ctx, index, "aBs", "aBs")
+        await ctx.show(message_id, ctx.at("adm_book_in_group", group=group, services=Raw(services)), inline_kb(rows))
 
     async def admin_book_masters(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
         service = self._service(ctx, service_id)
         rows = _rows([ibtn(m.name, f"aBm:{service_id}:{m.id}") for m in ctx.tenant.masters_for(service_id)], 2)
-        rows.append([ibtn(ctx.at("btn_back"), "aBs")])
+        rows.append([ibtn(ctx.at("btn_back"), self._group_back(ctx, service_id, "aBs", "aBg"))])
         await ctx.show(message_id, ctx.at("adm_book_master", service=service.title), inline_kb(rows))
 
     async def admin_book_days(self, ctx: Ctx, service_id: str, master_id: str, message_id: int | None,
@@ -1691,6 +1755,8 @@ class BotApp:
                 await self.admin_book_masters(ctx, a[0], message_id)
             else:
                 await self.admin_book_services(ctx, message_id)
+        elif op == "aBg" and len(a) == 1:
+            await self.admin_book_group(ctx, _int(a[0]), message_id)
         elif op == "aBm" and len(a) == 2:
             await self.admin_book_days(ctx, a[0], a[1], message_id)
         elif op == "aBd" and len(a) == 3:

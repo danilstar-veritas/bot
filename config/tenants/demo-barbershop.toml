@@ -109,11 +109,13 @@ sun = "off"
 # id — коротке латинське ім'я (до 16 символів), потрібне боту. Не змінюйте id, коли вже є записи.
 # duration — тривалість у хвилинах, price — ціна числом.
 # group — розділ у списку послуг; послуги з однаковим group показуються разом під заголовком.
+# icon — смайлик перед назвою у списках послуг і цін (необов'язково).
 
 # ── 👨 Чоловічі
 [[services]]
 id = "haircut"
 title = "Чоловіча стрижка"
+icon = "✂️"
 duration = 60
 price = 600
 group = "👨 Чоловічі"
@@ -121,6 +123,7 @@ group = "👨 Чоловічі"
 [[services]]
 id = "beard"
 title = "Моделювання бороди"
+icon = "🧔"
 duration = 30
 price = 350
 group = "👨 Чоловічі"
@@ -128,6 +131,7 @@ group = "👨 Чоловічі"
 [[services]]
 id = "combo"
 title = "Стрижка + борода"
+icon = "💈"
 duration = 90
 price = 850
 description = "Найпопулярніше: стрижка, оформлення бороди, гарячий рушник."
@@ -136,6 +140,7 @@ group = "👨 Чоловічі"
 [[services]]
 id = "buzz"
 title = "Стрижка машинкою"
+icon = "🪒"
 duration = 30
 price = 350
 group = "👨 Чоловічі"
@@ -144,6 +149,7 @@ group = "👨 Чоловічі"
 [[services]]
 id = "women_short"
 title = "Жіноча стрижка (коротке волосся)"
+icon = "💇‍♀️"
 duration = 60
 price = 700
 description = "Волосся до підборіддя. Укладання входить у вартість."
@@ -152,6 +158,7 @@ group = "👩 Жіночі"
 [[services]]
 id = "women_medium"
 title = "Жіноча стрижка (середнє волосся)"
+icon = "💁‍♀️"
 duration = 90
 price = 850
 description = "Волосся до плечей. Укладання входить у вартість."
@@ -160,6 +167,7 @@ group = "👩 Жіночі"
 [[services]]
 id = "women_long"
 title = "Жіноча стрижка (довге волосся)"
+icon = "👸"
 duration = 90
 price = 950
 description = "Волосся нижче плечей. Укладання входить у вартість."
@@ -168,6 +176,7 @@ group = "👩 Жіночі"
 [[services]]
 id = "pixie"
 title = "Жіноча стрижка піксі / андеркат"
+icon = "⚡"
 duration = 60
 price = 750
 description = "Коротка модельна стрижка, можна з вистриганням машинкою."
@@ -176,6 +185,7 @@ group = "👩 Жіночі"
 [[services]]
 id = "trim_ends"
 title = "Підрівнювання кінчиків"
+icon = "✨"
 duration = 30
 price = 400
 description = "Освіжити форму без зміни довжини."
@@ -184,51 +194,95 @@ group = "👩 Жіночі"
 [[services]]
 id = "bangs"
 title = "Стрижка чубчика"
+icon = "🎀"
 duration = 30
 price = 200
 group = "👩 Жіночі"
 
-# ── 🧒 Дитячі
+# ── 👦 Хлопчики (усі майстри; без бороди)
 [[services]]
 id = "kids_boy"
-title = "Дитяча стрижка для хлопчика (до 8 років)"
+title = "Маленький джентльмен"
+icon = "👦"
 duration = 45
 price = 400
-group = "🧒 Дитячі (до 8 років)"
+description = "Класична дитяча стрижка ножицями для хлопчиків до 8 років."
+group = "👦 Хлопчики (до 8 років)"
 
 [[services]]
+id = "kids_buzz"
+title = "Бешкетник під машинку"
+icon = "🪒"
+duration = 30
+price = 250
+description = "Дитяча стрижка машинкою для хлопчиків до 8 років."
+group = "👦 Хлопчики (до 8 років)"
+
+# ── 👧 Дівчатка (лише майстрині)
+[[services]]
 id = "kids_girl"
-title = "Дитяча стрижка для дівчинки (до 8 років)"
+title = "Маленька принцеса"
+icon = "👧"
+duration = 45
+price = 450
+description = "Дитяча стрижка на коротке або середнє волосся для дівчаток до 8 років."
+group = "👧 Дівчатка (до 8 років)"
+
+[[services]]
+id = "kids_girl_long"
+title = "Довгокоса принцеса"
+icon = "👑"
 duration = 60
-price = 500
-group = "🧒 Дитячі (до 8 років)"
+price = 550
+description = "Дитяча стрижка на довге волосся для дівчаток до 8 років."
+group = "👧 Дівчатка (до 8 років)"
+
+[[services]]
+id = "kids_ends"
+title = "Кінчики для принцеси"
+icon = "🌟"
+duration = 30
+price = 250
+description = "Підрівнювання кінчиків для дівчаток до 8 років."
+group = "👧 Дівчатка (до 8 років)"
+
+[[services]]
+id = "kids_bangs"
+title = "Чубчик для принцеси"
+icon = "🦋"
+duration = 30
+price = 150
+description = "Стрижка чубчика для дівчаток до 8 років."
+group = "👧 Дівчатка (до 8 років)"
 
 # ── Додатково (лише кнопкою «➕» на картці запису)
 [[services]]
 id = "wash"
 title = "Миття голови"
+icon = "🚿"
 duration = 15
 price = 150
 addon_only = true
 addon_for = ["haircut", "combo", "buzz", "women_short", "women_medium", "women_long", "pixie", "bangs",
-             "kids_boy", "kids_girl"]
+             "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_bangs"]
 
 
 # ── Майстри ──────────────────────────────────────────────────────────
 # services = ["*"] — робить усі послуги; або перелік id: ["haircut", "beard"].
 # [masters.schedule] — лише ті дні, що відрізняються від загального графіка.
+# about — легенда майстра: показується в «Контактах», її бачить і AI.
 
 [[masters]]
 id = "andriy"
 name = "Андрій"
-services = ["haircut", "beard", "combo", "kids_boy", "kids_girl", "buzz", "wash"]
-about = "Топ-барбер, 8 років досвіду, спеціаліст із фейдів."
+services = ["haircut", "beard", "combo", "kids_boy", "kids_buzz", "buzz", "wash"]
+about = "Колись підстриг себе сам у ліфті за дві зупинки — і не зрізав жодної зайвої волосини. Відтоді кожен фейд для нього — медитація, а ідеальний перехід — справа честі. Кава — тільки чорна, музика — тільки з вінілу."
 
 [[masters]]
 id = "oleg"
 name = "Олег"
-services = ["haircut", "beard", "combo", "kids_boy", "kids_girl", "buzz", "wash"]
-about = "Класичні стрижки і борода."
+services = ["haircut", "beard", "combo", "kids_boy", "kids_buzz", "buzz", "wash"]
+about = "Вважає бороду окремим видом мистецтва. Кажуть, якось він так рівно підрівняв клієнту бороду, що той одразу пішов фотографуватися на паспорт. По понеділках не працює: гострить ножиці й перечитує Гемінгвея."
   [masters.schedule]
   mon = "off"
   sun = "11:00-17:00"
@@ -237,17 +291,21 @@ about = "Класичні стрижки і борода."
 [[masters]]
 id = "olena"
 name = "Олена"
-services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_girl", "haircut", "buzz", "wash"]
-about = "Жіночі, дитячі та класичні чоловічі стрижки."
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_ends", "kids_bangs", "haircut", "buzz", "wash"]
+about = "Мріяла стати скульпторкою, але вирішила, що волосся слухняніше за мармур. За п'ять хвилин розмови розуміє, яка стрижка зробить вас щасливішими, — і поки жодного разу не помилилася."
 
 [[masters]]
 id = "maryna"
 name = "Марина"
-services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_girl", "haircut", "buzz", "wash"]
-about = "Жіночі, дитячі та класичні чоловічі стрижки."
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_ends", "kids_bangs", "haircut", "buzz", "wash"]
+about = "Головна чарівниця для маленьких принцес і джентльменів: у її кріслі діти забувають, що боялися стригтися. У кишені завжди є наліпка-нагорода, а в запасі — казка рівно на тридцять хвилин."
 
 
 # ── Власні тексти (необов'язково) ────────────────────────────────────
 # Будь-який текст бота можна замінити. Повний список — у файлі barberbot/texts.py.
 # [texts.uk]
 # start = "Привіт! Я бот барбершопу <b>{name}</b> 💈 Обирай, що треба 👇"
+
+# Кінець «🗓 Мої записи» — з тим, що є саме в нашому барбершопі.
+[texts.uk]
+my_footer = "\n\n☕ Ми вже чекаємо на вас! Кава чи чай — за наш рахунок, а поки чекаєте, можна зіграти партію в PlayStation 🎮\nВаш майстер уже точить ножиці ✂️😉\n\nЯкщо плани змінились — перенесіть або скасуйте запис кнопками нижче 👇"
