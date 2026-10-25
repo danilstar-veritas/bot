@@ -549,3 +549,195 @@ class SchedulerTests(BotTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AdminBookingTests(BotTestCase):
+    async def book(self, text_or_contact, service="haircut", master="andriy", day="20261027", time_="1200"):
+        """Адмін проходить /book до картки підтвердження."""
+        await self.send(msg(uid=ADMIN_ID, text="/book"))
+        self.assertIn("Запис клієнта", self.tg.last(ADMIN_ID)["text"])
+        await self.send(cb(f"aBs:{service}", uid=ADMIN_ID))
+        await self.send(cb(f"aBm:{service}:{master}", uid=ADMIN_ID))
+        await self.send(cb(f"aBd:{service}:{master}:{day}", uid=ADMIN_ID))
+        await self.send(cb(f"aBt:{service}:{master}:{day}:{time_}", uid=ADMIN_ID))
+        self.assertIn("Надішліть дані клієнта", self.tg.last(ADMIN_ID)["text"])
+        if isinstance(text_or_contact, dict):
+            await self.send(msg(uid=ADMIN_ID, contact=text_or_contact))
+        else:
+            await self.send(msg(uid=ADMIN_ID, text=text_or_contact))
+        return self.tg.last(ADMIN_ID)
+
+    async def test_offline_client_with_note(self):
+        card = await self.book("Олена Петрівна +380671234567\nхоче коротше, ніж минулого разу")
+        self.assertIn("Олена Петрівна · +380671234567", card["text"])
+        self.assertIn("📝 хоче коротше", card["text"])
+        self.assertIn("Новий клієнт без Telegram", card["text"])
+        self.assertEqual([b["callback_data"] for b in self.tg.buttons(card)], ["aBy", "aBx"])
+
+        await self.send(cb("aBy", uid=ADMIN_ID))
+        b = self.db.q("SELECT * FROM bookings")[0]
+        self.assertEqual((b["source"], b["status"], b["start_at"]), ("admin", "active", "2026-10-27 12:00"))
+        self.assertEqual(b["note"], "хоче коротше, ніж минулого разу")
+        client = self.db.get_client(b["client_id"])
+        self.assertLess(client["tg_id"], 0)
+        self.assertEqual((client["name"], client["phone"]), ("Олена Петрівна", "+380671234567"))
+        done = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("Записано", done)
+        self.assertIn("немає в Telegram", done)
+        self.assertEqual([p for m, p in self.tg.calls if m == "sendMessage" and p["chat_id"] < 0], [])
+
+        set_time(2026, 10, 27, 9, 0)
+        await self.send(msg(uid=ADMIN_ID, text="/today"))
+        today = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("Олена Петрівна", today)
+        self.assertIn("📞", today)
+        self.assertIn("📝 хоче коротше", today)
+
+        # Скасування: адміну чесно кажемо, що клієнт повідомлення не отримав.
+        await self.send(cb(f"acy:{b['id']}", uid=ADMIN_ID))
+        self.assertIn("немає в Telegram", self.tg.last(ADMIN_ID)["text"])
+        self.assertEqual(self.db.get_booking(b["id"])["status"], "cancelled")
+
+    async def test_existing_telegram_client_found_by_phone_is_notified(self):
+        client = self.make_client(phone="+380501234567")
+        card = await self.book("Іван +38050 123 45 67")
+        self.assertIn("уже є в боті", card["text"])
+        await self.send(cb("aBy", uid=ADMIN_ID))
+        b = self.db.q("SELECT * FROM bookings")[0]
+        self.assertEqual(b["client_id"], client["id"])
+        self.assertIn("Адміністратор записав вас", self.tg.last(CLIENT_ID)["text"])
+        self.assertIn("надіслано", self.tg.last(ADMIN_ID)["text"])
+        # Записане адміном видно клієнту в «Мої записи».
+        await self.send(msg(text="🗓 Мої записи"))
+        self.assertIn("Чоловіча стрижка", self.tg.last(CLIENT_ID)["text"])
+
+    async def test_shared_telegram_contact(self):
+        await self.book({"phone_number": "380931112233", "first_name": "Марко", "user_id": 777})
+        await self.send(cb("aBy", uid=ADMIN_ID))
+        client = self.db.get_client_by_tg(self.slug, 777)
+        self.assertEqual((client["name"], client["phone"]), ("Марко", "+380931112233"))
+        self.assertIn("Адміністратор записав вас", self.tg.last(777)["text"])
+
+    async def test_admin_ignores_client_limits_but_not_busy_time(self):
+        set_time(2026, 10, 26, 10, 20)
+        client = self.make_client()
+        for start in (datetime(2026, 10, 27, 12, 0), datetime(2026, 10, 28, 12, 0)):
+            self.booking.create(client["id"], "haircut", "andriy", start, "buttons")
+        # Клієнт сам більше записатися не може (ліміт 2), а для адміна часу «за годину» не треба чекати.
+        await self.send(msg(uid=ADMIN_ID, text="/book"))
+        await self.send(cb("aBd:haircut:andriy:20261026", uid=ADMIN_ID))
+        times = [b["text"] for b in self.tg.buttons(self.tg.last(ADMIN_ID))]
+        self.assertIn("10:30", times)
+        await self.send(cb("aBt:haircut:andriy:20261026:1030", uid=ADMIN_ID))
+        await self.send(msg(uid=ADMIN_ID, text="Іван +380501234567"))
+        await self.send(cb("aBy", uid=ADMIN_ID))
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings WHERE status = 'active'"), 3)
+        # Зайнятий час адмін не отримає.
+        await self.send(cb("aBd:haircut:andriy:20261027", uid=ADMIN_ID))
+        self.assertNotIn("12:00", [b["text"] for b in self.tg.buttons(self.tg.last(ADMIN_ID))])
+
+    async def test_card_requires_name_and_cancel_clears_state(self):
+        await self.book("+380671234567")
+        self.assertIn("Не бачу імені", self.tg.last(ADMIN_ID)["text"])
+        await self.send(cb("aBx", uid=ADMIN_ID))
+        self.assertIn("Запис не створено", self.tg.last(ADMIN_ID)["text"])
+        await self.send(cb("aBy", uid=ADMIN_ID))  # стара кнопка
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 0)
+
+    async def test_client_cannot_use_admin_booking(self):
+        await self.send(cb("aBs:haircut"))
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 0)
+        self.assertNotIn("Оберіть майстра", self.tg.last(CLIENT_ID).get("text", ""))
+
+    async def test_all_has_cancel_buttons_and_notifies_client(self):
+        client = self.make_client()
+        b = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 11, 6, 12, 0), "buttons")
+        await self.send(msg(uid=ADMIN_ID, text="/all"))
+        upcoming = self.tg.last(ADMIN_ID)
+        self.assertIn(f"acx:{b['id']}", [x["callback_data"] for x in self.tg.buttons(upcoming)])
+        await self.send(cb(f"acx:{b['id']}", uid=ADMIN_ID))
+        await self.send(cb(f"acy:{b['id']}", uid=ADMIN_ID))
+        self.assertEqual(self.db.get_booking(b["id"])["status"], "cancelled")
+        self.assertIn("скасовано адміністратором", self.tg.last(CLIENT_ID)["text"])
+        self.assertIn("клієнта повідомлено", self.tg.last(ADMIN_ID)["text"])
+
+
+class ParseClientInfoTests(unittest.TestCase):
+    def test_variants(self):
+        from barberbot.app import parse_client_info
+        self.assertEqual(parse_client_info("Олена +380671234567\nкоротше\nбез укладання"),
+                         ("Олена", "+380671234567", "коротше; без укладання"))
+        self.assertEqual(parse_client_info("+38 (067) 123-45-67\nОлена"), ("Олена", "+380671234567", ""))
+        self.assertEqual(parse_client_info("Олена, 0671234567"), ("Олена", "0671234567", ""))
+        self.assertEqual(parse_client_info("Олена"), ("Олена", None, ""))
+        self.assertEqual(parse_client_info("  "), ("", None, ""))
+
+
+class AddonTests(BotTestCase):
+    """Додаткові послуги (миття голови) на справжньому демо-закладі."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        from pathlib import Path
+        import tempfile
+        from barberbot.config import load_tenant
+        from .helpers import TOKEN
+        root = Path(__file__).resolve().parent.parent
+        text = (root / "config/tenants/demo-barbershop.toml").read_text(encoding="utf-8")
+        text = text.replace("ВСТАВТЕ_ТОКЕН_ВІД_BOTFATHER", TOKEN).replace("admins = []", f"admins = [{ADMIN_ID}]")
+        path = Path(tempfile.mkdtemp()) / "demo-barbershop.toml"
+        path.write_text(text, encoding="utf-8")
+        self.tenant = load_tenant(path)
+        self.slug = self.tenant.slug
+        self.app = BotApp(self.settings, [self.tenant], self.db, None, api_factory=lambda t: self.tg)
+        self.booking = self.app.bookings[self.slug]
+        self.make_client()
+
+    def card_buttons(self):
+        return {b["callback_data"]: b["text"] for b in self.tg.buttons(self.tg.last(CLIENT_ID))}
+
+    async def test_wash_addon(self):
+        await self.send(cb("bt:women_long:olena:20261027:1200"))
+        self.assertEqual(self.card_buttons().get("ba:women_long+wash:olena:20261027:1200"),
+                         "➕ Миття голови (+15 хв, +150 грн)")
+        await self.send(cb("ba:women_long+wash:olena:20261027:1200"))
+        card = self.tg.last(CLIENT_ID)["text"]
+        self.assertIn("Жіноча стрижка (довге волосся) + Миття голови", card)
+        self.assertIn("105 хв", card)
+        self.assertIn(self.tenant.price_str(1100), card)
+        await self.send(cb("bc:women_long+wash:olena:20261027:1200"))
+        b = self.db.q("SELECT * FROM bookings")[0]
+        self.assertEqual((b["service_title"], b["end_at"], b["price"]),
+                         ("Жіноча стрижка (довге волосся) + Миття голови", "2026-10-27 13:45", 1100))
+        self.assertTrue(self.tg.last(CLIENT_ID)["text"].startswith("✅ <b>Готово, ви записані!</b>"))
+
+    async def test_wash_where_allowed(self):
+        await self.send(cb("bt:haircut:oleg:20261027:1200"))
+        self.assertEqual([d.split(":")[1] for d in self.card_buttons() if d.startswith("ba:")], ["haircut+wash"])
+        for data in ("bt:trim_ends:olena:20261027:1200", "bt:beard:andriy:20261027:1200"):
+            await self.send(cb(data))
+            self.assertFalse([d for d in self.card_buttons() if d.startswith("ba:")], data)
+
+    async def test_wash_hidden_from_lists_and_shown_in_prices(self):
+        await self.send(msg(text="📅 Записатися"))
+        services = list(self.card_buttons())
+        self.assertNotIn("bs:wash", services)
+        self.assertFalse([d for d in services if "+" in d])
+        await self.send(msg(text="💈 Послуги і ціни"))
+        prices = self.tg.last(CLIENT_ID)["text"]
+        self.assertIn("Можна додати до стрижки", prices)
+        self.assertIn("Миття голови — +150 грн, +15 хв", prices)
+        self.assertNotIn("Чоловіча стрижка + Миття голови", prices)
+        self.assertNotIn("Миття і укладання входять", prices)
+
+    async def test_addon_needs_time_for_both(self):
+        # Олег зайнятий з 13:00 — о 12:00 стрижка (60 хв) влазить, а стрижка + миття (75 хв) — ні.
+        other = self.db.upsert_client(self.slug, 999, "Інший", None, None, "uk", self.tenant.now())
+        self.booking.create(other["id"], "beard", "oleg", datetime(2026, 10, 27, 13, 0), "buttons")
+        await self.send(cb("bt:haircut+wash:oleg:20261027:1200"))
+        self.assertIn("щойно зайняли", self.tg.last(CLIENT_ID)["text"])
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings WHERE client_id = ?", self.client()["id"]), 0)
+
+    async def test_addon_button_rejects_plain_service(self):
+        await self.send(cb("ba:haircut:oleg:20261027:1200"))  # не комбінація — застаріла кнопка
+        self.assertEqual(self.db.scalar("SELECT COUNT(*) FROM bookings"), 0)

@@ -61,6 +61,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "card": "📝 <b>Перевірте, будь ласка:</b>\n\n💈 {service}\n👤 Майстер: {master}\n"
                 "📅 {day} о {time}\n⏱ {duration} хв · 💰 {price}",
         "btn_confirm": "✅ Підтвердити",
+        "btn_add_addon": "➕ {title} (+{duration} хв, +{price})",
         "btn_other_time": "⬅️ Інший час",
         "btn_no_change": "✖️ Ні, змінити",
         "ask_phone": "Залишилось вказати номер телефону, щоб майстер міг з вами зв'язатися.\n\n"
@@ -106,6 +107,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "price_item": "\n\n<b>{title}</b> — {price}\n⏱ {duration} хв{masters}",
         "price_masters": " · {masters}",
         "price_desc": "\n{description}",
+        "prices_addons_header": "\n\n➕ <b>Можна додати до стрижки</b> (кнопкою під час запису)",
+        "price_addon_item": "\n{title} — +{price}, +{duration} хв",
         "contacts_header": "📍 <b>{name}</b>",
         "contacts_address": "\n\n🏠 {address}",
         "contacts_phone": "\n📞 {phone}",
@@ -145,6 +148,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "state_cleared": "Скасовано.",
         # Адмін
         "admin_help": "🛠 <b>Панель керування · {name}</b>\n\n"
+                      "/book — записати клієнта (дзвінок, візит)\n"
                       "/today — записи на сьогодні\n"
                       "/tomorrow — записи на завтра\n"
                       "/week — записи на 7 днів\n"
@@ -200,6 +204,36 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_week_empty": "\n\nЗаписів немає.",
         "adm_week_more": "\n\n➕ Пізніше ще записів: {count} — /all",
         "adm_all_header": "🗓 <b>Усі майбутні записи</b>",
+        "adm_cancel_hint": "\n\n🗑 — скасувати запис (клієнт у Telegram отримає повідомлення)",
+        "adm_cancelled_done_offline": "🗑 Запис #{id} скасовано. Клієнта немає в Telegram — повідомте його самі.",
+        "adm_note_line": "\n📝 {note}",
+        "adm_via_admin": " · записав адміністратор 📞",
+        "btn_adm_book_confirm": "✅ Записати",
+        "btn_adm_book_cancel": "✖️ Скасувати",
+        "adm_book_service": "📞 <b>Запис клієнта</b>\nОберіть послугу:",
+        "adm_book_master": "📞 {service}\nОберіть майстра:",
+        "adm_book_day": "📞 {service} · {master}\nОберіть день:",
+        "adm_book_time": "📞 {service} · {master} · {day}\nОберіть час:",
+        "adm_book_no_days": "У майстра {master} немає вільних днів на «{service}». Оберіть іншого майстра:",
+        "adm_book_client_prompt": "📞 {service} · {master} · {day} о {time}\n\n"
+                                  "Надішліть дані клієнта одним повідомленням: <b>ім'я</b> і <b>телефон</b>, "
+                                  "з нового рядка — коментар (необов'язково). Наприклад:\n"
+                                  "<code>Олена +380671234567\nхоче коротше, ніж минулого разу</code>\n\n"
+                                  "Або поділіться контактом клієнта з Telegram (📎 → Контакт).\n/cancel — скасувати.",
+        "adm_book_need_name": "Не бачу імені клієнта. Надішліть ще раз: ім'я, телефон, з нового рядка — коментар.",
+        "adm_book_card": "📞 <b>Перевірте запис</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} о {time}\n"
+                         "💰 {price}{note}\n\n{hint}\n\nЩоб змінити дані — просто надішліть їх ще раз.",
+        "adm_book_hint_tg": "✉️ Клієнт уже є в боті ({client}) — отримає повідомлення і нагадування.",
+        "adm_book_hint_known": "🗂 Клієнт уже є в базі ({client}), але не в Telegram — повідомлень не отримає.",
+        "adm_book_hint_offline": "📵 Новий клієнт без Telegram — повідомлень і нагадувань не отримає.",
+        "adm_book_duplicate": "У клієнта вже є запис на цей час (#{id}).",
+        "adm_book_done": "✅ <b>Записано</b> <code>#{id}</code>\n👤 {client}\n💈 {service} · {master}\n"
+                         "📅 {day} о {time}{notified}",
+        "adm_book_notified": "\n\n✉️ Клієнту надіслано повідомлення в Telegram.",
+        "adm_book_not_notified": "\n\n📵 Клієнт не отримав повідомлення (немає в Telegram) — за потреби подзвоніть.",
+        "adm_book_aborted": "Запис не створено.",
+        "client_booked_by_admin": "📞 Адміністратор записав вас:\n💈 {service} · {master}\n📅 {day} о {time}\n💰 {price}\n\n"
+                                  "Перенести чи скасувати — «🗓 Мої записи».",
         "adm_day_cancelled": " (скасовано: {count})",
         "adm_cancelled_by_client": " — ❌ скасував клієнт",
         "adm_cancelled_by_admin": " — ❌ скасував адміністратор",
@@ -248,6 +282,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_admin": "Панель власника",
         "cmd_today": "Записи на сьогодні",
         "cmd_tomorrow": "Записи на завтра",
+        "cmd_book": "Записати клієнта",
         "cmd_week": "Записи на 7 днів",
         "cmd_all": "Усі майбутні записи",
         "cmd_stats": "Статистика",
@@ -286,6 +321,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "card": "📝 <b>Проверьте, пожалуйста:</b>\n\n💈 {service}\n👤 Мастер: {master}\n"
                 "📅 {day} в {time}\n⏱ {duration} мин · 💰 {price}",
         "btn_confirm": "✅ Подтвердить",
+        "btn_add_addon": "➕ {title} (+{duration} мин, +{price})",
         "btn_other_time": "⬅️ Другое время",
         "btn_no_change": "✖️ Нет, изменить",
         "ask_phone": "Осталось указать номер телефона, чтобы мастер мог с вами связаться.\n\n"
@@ -329,6 +365,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "price_item": "\n\n<b>{title}</b> — {price}\n⏱ {duration} мин{masters}",
         "price_masters": " · {masters}",
         "price_desc": "\n{description}",
+        "prices_addons_header": "\n\n➕ <b>Можно добавить к стрижке</b> (кнопкой при записи)",
+        "price_addon_item": "\n{title} — +{price}, +{duration} мин",
         "contacts_header": "📍 <b>{name}</b>",
         "contacts_address": "\n\n🏠 {address}",
         "contacts_phone": "\n📞 {phone}",
@@ -365,6 +403,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "myid": "Ваш Telegram ID: <code>{id}</code>",
         "state_cleared": "Отменено.",
         "admin_help": "🛠 <b>Панель управления · {name}</b>\n\n"
+                      "/book — записать клиента (звонок, визит)\n"
                       "/today — записи на сегодня\n"
                       "/tomorrow — записи на завтра\n"
                       "/week — записи на 7 дней\n"
@@ -420,6 +459,36 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_week_empty": "\n\nЗаписей нет.",
         "adm_week_more": "\n\n➕ Позже ещё записей: {count} — /all",
         "adm_all_header": "🗓 <b>Все будущие записи</b>",
+        "adm_cancel_hint": "\n\n🗑 — отменить запись (клиент в Telegram получит сообщение)",
+        "adm_cancelled_done_offline": "🗑 Запись #{id} отменена. Клиента нет в Telegram — сообщите ему сами.",
+        "adm_note_line": "\n📝 {note}",
+        "adm_via_admin": " · записал администратор 📞",
+        "btn_adm_book_confirm": "✅ Записать",
+        "btn_adm_book_cancel": "✖️ Отмена",
+        "adm_book_service": "📞 <b>Запись клиента</b>\nВыберите услугу:",
+        "adm_book_master": "📞 {service}\nВыберите мастера:",
+        "adm_book_day": "📞 {service} · {master}\nВыберите день:",
+        "adm_book_time": "📞 {service} · {master} · {day}\nВыберите время:",
+        "adm_book_no_days": "У мастера {master} нет свободных дней на «{service}». Выберите другого мастера:",
+        "adm_book_client_prompt": "📞 {service} · {master} · {day} в {time}\n\n"
+                                  "Отправьте данные клиента одним сообщением: <b>имя</b> и <b>телефон</b>, "
+                                  "с новой строки — комментарий (необязательно). Например:\n"
+                                  "<code>Елена +380671234567\nхочет короче, чем в прошлый раз</code>\n\n"
+                                  "Или поделитесь контактом клиента из Telegram (📎 → Контакт).\n/cancel — отменить.",
+        "adm_book_need_name": "Не вижу имени клиента. Отправьте ещё раз: имя, телефон, с новой строки — комментарий.",
+        "adm_book_card": "📞 <b>Проверьте запись</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} в {time}\n"
+                         "💰 {price}{note}\n\n{hint}\n\nЧтобы изменить данные — просто отправьте их ещё раз.",
+        "adm_book_hint_tg": "✉️ Клиент уже есть в боте ({client}) — получит сообщение и напоминания.",
+        "adm_book_hint_known": "🗂 Клиент уже есть в базе ({client}), но не в Telegram — сообщений не получит.",
+        "adm_book_hint_offline": "📵 Новый клиент без Telegram — сообщений и напоминаний не получит.",
+        "adm_book_duplicate": "У клиента уже есть запись на это время (#{id}).",
+        "adm_book_done": "✅ <b>Записано</b> <code>#{id}</code>\n👤 {client}\n💈 {service} · {master}\n"
+                         "📅 {day} в {time}{notified}",
+        "adm_book_notified": "\n\n✉️ Клиенту отправлено сообщение в Telegram.",
+        "adm_book_not_notified": "\n\n📵 Клиент не получил сообщение (нет в Telegram) — при необходимости позвоните.",
+        "adm_book_aborted": "Запись не создана.",
+        "client_booked_by_admin": "📞 Администратор записал вас:\n💈 {service} · {master}\n📅 {day} в {time}\n💰 {price}\n\n"
+                                  "Перенести или отменить — «🗓 Мои записи».",
         "adm_day_cancelled": " (отменено: {count})",
         "adm_cancelled_by_client": " — ❌ отменил клиент",
         "adm_cancelled_by_admin": " — ❌ отменил администратор",
@@ -467,6 +536,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_admin": "Панель владельца",
         "cmd_today": "Записи на сегодня",
         "cmd_tomorrow": "Записи на завтра",
+        "cmd_book": "Записать клиента",
         "cmd_week": "Записи на 7 дней",
         "cmd_all": "Все будущие записи",
         "cmd_stats": "Статистика",
@@ -505,6 +575,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "card": "📝 <b>Please check:</b>\n\n💈 {service}\n👤 Barber: {master}\n"
                 "📅 {day} at {time}\n⏱ {duration} min · 💰 {price}",
         "btn_confirm": "✅ Confirm",
+        "btn_add_addon": "➕ {title} (+{duration} min, +{price})",
         "btn_other_time": "⬅️ Other time",
         "btn_no_change": "✖️ No, change",
         "ask_phone": "One last thing — your phone number, so the barber can reach you.\n\n"
@@ -548,6 +619,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "price_item": "\n\n<b>{title}</b> — {price}\n⏱ {duration} min{masters}",
         "price_masters": " · {masters}",
         "price_desc": "\n{description}",
+        "prices_addons_header": "\n\n➕ <b>Add-ons</b> (a button while booking)",
+        "price_addon_item": "\n{title} — +{price}, +{duration} min",
         "contacts_header": "📍 <b>{name}</b>",
         "contacts_address": "\n\n🏠 {address}",
         "contacts_phone": "\n📞 {phone}",
@@ -584,6 +657,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "myid": "Your Telegram ID: <code>{id}</code>",
         "state_cleared": "Cancelled.",
         "admin_help": "🛠 <b>Control panel · {name}</b>\n\n"
+                      "/book — book a client (call, walk-in)\n"
                       "/today — today's bookings\n"
                       "/tomorrow — tomorrow's bookings\n"
                       "/week — bookings for 7 days\n"
@@ -638,6 +712,36 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_week_empty": "\n\nNo bookings.",
         "adm_week_more": "\n\n➕ {count} more later — /all",
         "adm_all_header": "🗓 <b>All upcoming bookings</b>",
+        "adm_cancel_hint": "\n\n🗑 — cancel a booking (clients on Telegram get a message)",
+        "adm_cancelled_done_offline": "🗑 Booking #{id} cancelled. The client isn't on Telegram — let them know yourself.",
+        "adm_note_line": "\n📝 {note}",
+        "adm_via_admin": " · booked by admin 📞",
+        "btn_adm_book_confirm": "✅ Book",
+        "btn_adm_book_cancel": "✖️ Cancel",
+        "adm_book_service": "📞 <b>Book a client</b>\nChoose a service:",
+        "adm_book_master": "📞 {service}\nChoose a master:",
+        "adm_book_day": "📞 {service} · {master}\nChoose a day:",
+        "adm_book_time": "📞 {service} · {master} · {day}\nChoose a time:",
+        "adm_book_no_days": "{master} has no free days for «{service}». Choose another master:",
+        "adm_book_client_prompt": "📞 {service} · {master} · {day} at {time}\n\n"
+                                  "Send the client's details in one message: <b>name</b> and <b>phone</b>, "
+                                  "a comment on a new line (optional). For example:\n"
+                                  "<code>Olena +380671234567\nwants it shorter than last time</code>\n\n"
+                                  "Or share the client's Telegram contact (📎 → Contact).\n/cancel — cancel.",
+        "adm_book_need_name": "I can't see the client's name. Send again: name, phone, a comment on a new line.",
+        "adm_book_card": "📞 <b>Check the booking</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} at {time}\n"
+                         "💰 {price}{note}\n\n{hint}\n\nTo change the details, just send them again.",
+        "adm_book_hint_tg": "✉️ The client is already in the bot ({client}) — they'll get a message and reminders.",
+        "adm_book_hint_known": "🗂 The client is already in the database ({client}) but not on Telegram — no messages.",
+        "adm_book_hint_offline": "📵 New client without Telegram — no messages or reminders.",
+        "adm_book_duplicate": "The client already has a booking at this time (#{id}).",
+        "adm_book_done": "✅ <b>Booked</b> <code>#{id}</code>\n👤 {client}\n💈 {service} · {master}\n"
+                         "📅 {day} at {time}{notified}",
+        "adm_book_notified": "\n\n✉️ The client got a Telegram message.",
+        "adm_book_not_notified": "\n\n📵 The client got no message (not on Telegram) — call them if needed.",
+        "adm_book_aborted": "Booking not created.",
+        "client_booked_by_admin": "📞 The admin booked you in:\n💈 {service} · {master}\n📅 {day} at {time}\n💰 {price}\n\n"
+                                  "To reschedule or cancel — «🗓 My bookings».",
         "adm_day_cancelled": " (cancelled: {count})",
         "adm_cancelled_by_client": " — ❌ cancelled by client",
         "adm_cancelled_by_admin": " — ❌ cancelled by admin",
@@ -685,6 +789,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_admin": "Owner panel",
         "cmd_today": "Today's bookings",
         "cmd_tomorrow": "Tomorrow's bookings",
+        "cmd_book": "Book a client",
         "cmd_week": "Bookings for 7 days",
         "cmd_all": "All upcoming bookings",
         "cmd_stats": "Statistics",

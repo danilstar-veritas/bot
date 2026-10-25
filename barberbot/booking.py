@@ -52,8 +52,9 @@ class BookingService:
         today = self.tenant.today()
         return [today + timedelta(days=i) for i in range(self.tenant.days_ahead)]
 
-    def not_before(self) -> datetime:
-        return self.tenant.now() + timedelta(minutes=self.tenant.min_lead_min)
+    def not_before(self, admin: bool = False) -> datetime:
+        """Найраніший час запису. Адміністратор може записати й на найближчий вільний час."""
+        return self.tenant.now() if admin else self.tenant.now() + timedelta(minutes=self.tenant.min_lead_min)
 
     def masters_for_sel(self, service_id: str, master_sel: str | None) -> list[Master]:
         self.service(service_id)
@@ -77,7 +78,7 @@ class BookingService:
         return busy
 
     def master_slots(self, service: Service, master: Master, day: date,
-                     exclude_id: int | None = None) -> list[datetime]:
+                     exclude_id: int | None = None, admin: bool = False) -> list[datetime]:
         if service.id not in master.services:
             return []
         if day < self.tenant.today() or day > self.last_day():
@@ -86,23 +87,23 @@ class BookingService:
         if not work:
             return []
         return free_starts(work, self._busy(master.id, day, exclude_id), service.duration,
-                           self.tenant.slot_step_min, self.not_before())
+                           self.tenant.slot_step_min, self.not_before(admin))
 
     def free_slots(self, service_id: str, master_sel: str | None, day: date,
-                   exclude_id: int | None = None) -> dict[str, list[str]]:
+                   exclude_id: int | None = None, admin: bool = False) -> dict[str, list[str]]:
         """{"10:00": ["andriy", "oleg"], "10:30": ["oleg"], ...} — у порядку часу."""
         service = self.service(service_id)
         result: dict[str, list[str]] = {}
         for m in self.masters_for_sel(service_id, master_sel):
-            for t in self.master_slots(service, m, day, exclude_id):
+            for t in self.master_slots(service, m, day, exclude_id, admin):
                 result.setdefault(fmt_hhmm(t), []).append(m.id)
         return dict(sorted(result.items()))
 
     def available_days(self, service_id: str, master_sel: str | None, exclude_id: int | None = None,
-                       limit: int | None = None) -> list[date]:
+                       limit: int | None = None, admin: bool = False) -> list[date]:
         days: list[date] = []
         for d in self.horizon_days():
-            if self.free_slots(service_id, master_sel, d, exclude_id):
+            if self.free_slots(service_id, master_sel, d, exclude_id, admin):
                 days.append(d)
                 if limit and len(days) >= limit:
                     break
@@ -113,30 +114,41 @@ class BookingService:
         return len(self.db.active_bookings_overlapping(self.slug, start, start + timedelta(days=1), master_id))
 
     def resolve_master(self, service_id: str, master_sel: str | None, start: datetime,
-                       exclude_id: int | None = None) -> str | None:
-        """Конкретний майстер, вільний на цей час (для «будь-якого» — найменш завантажений)."""
+                       exclude_id: int | None = None, admin: bool = False) -> str | None:
+        """Конкретний майстер, вільний на цей час.
+
+        Для «будь-якого» — той, у кого найменше майбутніх записів; при рівності — у кого менше записів
+        цього дня, далі — кому найдавніше давали запис (по черзі), і лише потім — порядок у налаштуваннях.
+        """
         service = self.service(service_id)
+        now = self.tenant.now()
         candidates = []
         for m in self.masters_for_sel(service_id, master_sel):
-            if start in self.master_slots(service, m, start.date(), exclude_id):
-                candidates.append((self._day_load(m.id, start.date()), list(self.tenant.masters).index(m.id), m.id))
+            if start in self.master_slots(service, m, start.date(), exclude_id, admin):
+                candidates.append((self.db.master_upcoming_count(self.slug, m.id, now, exclude_id),
+                                   self._day_load(m.id, start.date()),
+                                   self.db.master_last_booked(self.slug, m.id),
+                                   list(self.tenant.masters).index(m.id), m.id))
         if not candidates:
             return None
-        return min(candidates)[2]
+        return min(candidates)[-1]
 
-    def _check_window(self, start: datetime) -> None:
+    def _check_window(self, start: datetime, admin: bool = False) -> None:
         now = self.tenant.now()
         if start <= now:
             raise BookingError("past")
-        if start < self.not_before():
+        if start < self.not_before(admin):
             raise BookingError("too_soon", minutes=self.tenant.min_lead_min)
         if start.date() > self.last_day():
             raise BookingError("too_far", days=self.tenant.days_ahead)
 
     # ------------------------------------------------------------ create
     def validate_new(self, client_id: int, service_id: str, master_sel: str | None,
-                     start: datetime) -> str:
-        """Перевіряє, чи можна записатися. Повертає id конкретного майстра."""
+                     start: datetime, admin: bool = False) -> str:
+        """Перевіряє, чи можна записатися. Повертає id конкретного майстра.
+
+        admin=True — записує адміністратор: без ліміту записів на клієнта і без мінімального часу до початку.
+        """
         self.masters_for_sel(service_id, master_sel)
         service = self.service(service_id)
         now = self.tenant.now()
@@ -145,17 +157,17 @@ class BookingService:
         for b in upcoming:
             if parse_dt(b["start_at"]) < end and start < parse_dt(b["end_at"]):
                 raise BookingError("duplicate", booking_id=b["id"])
-        if len(upcoming) >= self.tenant.max_active_per_client:
+        if not admin and len(upcoming) >= self.tenant.max_active_per_client:
             raise BookingError("too_many", count=len(upcoming))
-        self._check_window(start)
-        master_id = self.resolve_master(service_id, master_sel, start)
+        self._check_window(start, admin)
+        master_id = self.resolve_master(service_id, master_sel, start, admin=admin)
         if master_id is None:
             raise BookingError("slot_taken")
         return master_id
 
     def create(self, client_id: int, service_id: str, master_id: str, start: datetime,
                source: str) -> sqlite3.Row:
-        resolved = self.validate_new(client_id, service_id, master_id, start)
+        resolved = self.validate_new(client_id, service_id, master_id, start, admin=source == "admin")
         service = self.service(service_id)
         master = self.master(resolved)
         now = self.tenant.now()

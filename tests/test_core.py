@@ -36,13 +36,32 @@ class ConfigTests(unittest.TestCase):
         text = (ROOT / "config/tenants/demo-barbershop.toml").read_text(encoding="utf-8")
         text = text.replace("ВСТАВТЕ_ТОКЕН_ВІД_BOTFATHER", TOKEN).replace("admins = []", "admins = [42]")
         t = load_tenant(write_toml(text, "demo.toml"))
-        self.assertEqual(len(t.services), 11)
-        self.assertEqual(list(t.masters), ["andriy", "oleg"])
-        self.assertIn("women_long", t.masters["andriy"].services)  # services = ["*"]
-        self.assertNotIn("women_long", t.masters["oleg"].services)
+        self.assertEqual(len(t.visible_services()), 11)
+        # Миття голови — лише додатком, до всього, крім кінчиків і бороди; у всіх майстрів.
+        combos = {s.id: s for s in t.services.values() if s.base_id}
+        self.assertTrue(t.services["wash"].hidden)
+        self.assertTrue(all(c.endswith("+wash") for c in combos))
+        self.assertEqual({c.split("+")[0] for c in combos},
+                         {"haircut", "combo", "kids", "buzz", "women_short", "women_medium", "women_long",
+                          "pixie", "bangs"})
+        self.assertEqual({m.id for m in t.masters_for("haircut+wash")}, {"andriy", "oleg", "olena", "maryna"})
+        self.assertEqual((combos["women_long+wash"].duration, combos["women_long+wash"].price), (105, 1100))
+        self.assertEqual([s.id for s in t.addons_for("haircut", "oleg")], ["haircut+wash"])
+        self.assertEqual(list(t.masters), ["andriy", "oleg", "olena", "maryna"])
+        # Жіночі стрижки — лише майстрині; вони ж роблять дитячу і просту чоловічу (без бороди).
+        for m in ("andriy", "oleg"):
+            self.assertNotIn("women_long", t.masters[m].services)
+        for m in ("olena", "maryna"):
+            self.assertIn("women_long", t.masters[m].services)
+            self.assertIn("kids", t.masters[m].services)
+            self.assertIn("haircut", t.masters[m].services)
+            self.assertIn("buzz", t.masters[m].services)
+            self.assertNotIn("beard", t.masters[m].services)
+            self.assertNotIn("combo", t.masters[m].services)
         self.assertEqual(t.masters["oleg"].schedule[0], [])  # пн — вихідний
         self.assertEqual(len(t.masters["oleg"].schedule[6]), 1)  # нд — 11-17
-        self.assertNotIn("kids", t.masters["oleg"].services)
+        self.assertIn("kids", t.masters["oleg"].services)
+        self.assertIn("oleg", [m.id for m in t.masters_for("kids+wash")])
         self.assertEqual(t.price_str(850), "850 грн")
         self.assertEqual(t.warnings, [])
         summary = t.schedule_summary("uk")
@@ -216,6 +235,20 @@ class SlotTests(unittest.TestCase):
         day = datetime(2026, 10, 27, 12, 0)
         self.svc.create(self.client2, "haircut", "andriy", datetime(2026, 10, 27, 10, 0), "buttons")
         self.assertEqual(self.svc.resolve_master("haircut", "any", day), "oleg")
+
+    def test_any_master_fewest_upcoming_overall(self):
+        # В Андрія 27.10 вільно, але загалом у нього 2 майбутні записи, а в Олега — 1 (саме 27.10).
+        self.svc.create(self.client2, "haircut", "andriy", datetime(2026, 10, 28, 10, 0), "buttons")
+        self.svc.create(self.client2, "haircut", "andriy", datetime(2026, 10, 29, 10, 0), "buttons")
+        self.svc.create(self.client, "haircut", "oleg", datetime(2026, 10, 27, 10, 0), "buttons")
+        self.assertEqual(self.svc.resolve_master("haircut", "any", datetime(2026, 10, 27, 12, 0)), "oleg")
+
+    def test_any_master_rotates_on_tie(self):
+        # Майбутніх записів ні в кого немає; Андрію запис давали нещодавно (потім скасували) — черга Олега.
+        self.assertEqual(self.svc.resolve_master("haircut", "any", datetime(2026, 10, 27, 12, 0)), "andriy")
+        b = self.svc.create(self.client2, "haircut", "andriy", datetime(2026, 10, 28, 10, 0), "buttons")
+        self.svc.cancel(b["id"], "admin")
+        self.assertEqual(self.svc.resolve_master("haircut", "any", datetime(2026, 10, 27, 12, 0)), "oleg")
 
     def test_cancel_rules(self):
         b = self.svc.create(self.client, "haircut", "andriy", datetime(2026, 10, 27, 10, 0), "buttons")

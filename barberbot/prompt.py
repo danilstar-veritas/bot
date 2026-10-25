@@ -79,12 +79,25 @@ def static_prompt(tenant: Tenant) -> str:
         parts.append("## Побажання закладу щодо спілкування\n" + tenant.ai_extra.strip())
 
     data = ["## Дані закладу", *_info_lines(tenant), "", "Послуги (id: назва — тривалість — ціна — хто виконує):"]
-    for s in tenant.services.values():
+    for s in tenant.visible_services():
         names = ", ".join(m.name for m in tenant.masters_for(s.id)) or "ніхто (запис недоступний)"
         line = f"- {s.id}: {s.title} — {s.duration} хв — {tenant.price_str(s.price)} — {names}."
         if s.description:
             line += f" {s.description}"
         data.append(line)
+    addons = [a for a in tenant.addons() if any(c.addon_id == a.id for c in tenant.services.values())]
+    if addons:
+        data += ["", "Додаткові послуги (клієнт додає їх сам кнопкою «➕» на картці підтвердження запису кнопками; "
+                     "ти їх додати не можеш — порадь записатися кнопкою «📅 Записатися»):"]
+        for a in addons:
+            bases = [tenant.services[c.base_id].title for c in tenant.services.values() if c.addon_id == a.id]
+            masters = sorted({m.name for c in tenant.services.values() if c.addon_id == a.id
+                              for m in tenant.masters_for(c.id)})
+            line = (f"- {a.title} — +{a.duration} хв — +{tenant.price_str(a.price)}. Можна додати до: "
+                    f"{', '.join(bases)}. Майстри: {', '.join(masters)}.")
+            if a.hidden:
+                line += " Окремо на неї не записують."
+            data.append(line)
     data += ["", "Майстри (id: імʼя — графік):"]
     for m in tenant.masters.values():
         schedule = tenant.schedule_summary("uk", m).replace("\n", "; ")
@@ -135,7 +148,7 @@ def dynamic_prompt(tenant: Tenant, client) -> str:
 
 
 def tool_definitions(tenant: Tenant) -> list[dict]:
-    service_ids = list(tenant.services)
+    service_ids = [s.id for s in tenant.visible_services()]
     master_ids = list(tenant.masters) + ["any"]
     date_prop = {"type": "string", "description": "Дата у форматі YYYY-MM-DD (див. календар у розділі «Зараз»)."}
     time_prop = {"type": "string", "description": "Час початку у форматі HH:MM, як у результаті get_free_slots."}

@@ -125,6 +125,13 @@ class DB:
             self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Нові колонки для баз, створених попередніми версіями."""
+        columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(bookings)")}
+        if "note" not in columns:
+            self.conn.execute("ALTER TABLE bookings ADD COLUMN note TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -164,6 +171,21 @@ class DB:
     def get_client_by_tg(self, tenant: str, tg_id: int) -> sqlite3.Row | None:
         return self.one("SELECT * FROM clients WHERE tenant = ? AND tg_id = ?", tenant, tg_id)
 
+    def find_client_by_phone(self, tenant: str, phone: str) -> sqlite3.Row | None:
+        """Клієнт із таким телефоном; якщо їх кілька — спершу той, хто є в Telegram."""
+        return self.one("SELECT * FROM clients WHERE tenant = ? AND phone = ? ORDER BY tg_id < 0, id DESC LIMIT 1",
+                        tenant, phone)
+
+    def create_offline_client(self, tenant: str, name: str, phone: str | None, now: datetime) -> sqlite3.Row:
+        """Клієнт без Telegram (записаний адміністратором). tg_id від'ємний — йому нічого не надсилаємо."""
+        tg_id = min(self.scalar("SELECT MIN(tg_id) FROM clients WHERE tenant = ?", tenant), 0) - 1
+        ts = dt_str(now)
+        self.conn.execute(
+            "INSERT INTO clients (tenant, tg_id, name, phone, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (tenant, tg_id, name, phone, ts, ts),
+        )
+        return self.get_client_by_tg(tenant, tg_id)
+
     def set_client_field(self, client_id: int, field: str, value) -> None:
         if field not in {"name", "phone", "paused_until", "blocked", "no_nudges", "lang"}:
             raise ValueError(field)
@@ -183,6 +205,17 @@ class DB:
 
     def get_booking(self, booking_id: int) -> sqlite3.Row | None:
         return self.one("SELECT * FROM bookings WHERE id = ?", booking_id)
+
+    def master_upcoming_count(self, tenant: str, master_id: str, now: datetime,
+                              exclude_id: int | None = None) -> int:
+        """Скільки в майстра активних записів, які ще не закінчились."""
+        return self.scalar("SELECT COUNT(*) FROM bookings WHERE tenant = ? AND master_id = ? AND status = 'active' "
+                           "AND end_at > ? AND id != ?", tenant, master_id, dt_str(now), exclude_id or 0)
+
+    def master_last_booked(self, tenant: str, master_id: str) -> str:
+        """Коли майстру востаннє створили запис ("" — ще ніколи)."""
+        return self.scalar("SELECT MAX(created_at) FROM bookings WHERE tenant = ? AND master_id = ?",
+                           tenant, master_id, default="")
 
     def active_bookings_overlapping(self, tenant: str, start: datetime, end: datetime,
                                     master_id: str | None = None, exclude_id: int | None = None) -> list[sqlite3.Row]:
@@ -229,7 +262,7 @@ class DB:
         )
 
     def set_booking_field(self, booking_id: int, field: str, value) -> None:
-        if field not in {"reminders_sent", "client_confirmed", "nudged"}:
+        if field not in {"reminders_sent", "client_confirmed", "nudged", "note"}:
             raise ValueError(field)
         self.conn.execute(f"UPDATE bookings SET {field} = ? WHERE id = ?", (value, booking_id))
 

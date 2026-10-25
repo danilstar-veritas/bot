@@ -138,7 +138,7 @@ def cmd_check() -> int:
     for t in tenants:
         status = "" if t.enabled else "  (ВИМКНЕНО: enabled = false)"
         print(f"── {t.name} [{t.path.name}]{status}")
-        print(f"   Послуг: {len(t.services)}, майстрів: {len(t.masters)}, мови: {', '.join(t.languages)}, "
+        print(f"   Послуг: {len(t.visible_services())}, майстрів: {len(t.masters)}, мови: {', '.join(t.languages)}, "
               f"часовий пояс: {t.timezone}")
         print(f"   Адміністратори (Telegram ID): {', '.join(map(str, t.admins)) or '— немає'}")
         print("   Графік закладу: " + t.schedule_summary(t.lang).replace("\n", "; "))

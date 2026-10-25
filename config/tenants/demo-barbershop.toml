@@ -50,7 +50,7 @@ extra = """
 Поки чекаєте — кава, чай і PlayStation безкоштовно.
 Дітей до 12 років стрижемо лише в присутності батьків.
 Подарункові сертифікати можна купити в закладі (номінал від 500 грн).
-Укладання та миття голови входять у вартість стрижки.
+Укладання входить у вартість стрижки. Миття голови — окремо, 150 грн (можна додати під час запису).
 """
 # Як підписуються ваші відповіді клієнтам (за замовчуванням «Адміністратор»).
 admin_title = ""
@@ -146,21 +146,21 @@ id = "women_short"
 title = "Жіноча стрижка (коротке волосся)"
 duration = 60
 price = 700
-description = "Волосся до підборіддя. Миття і укладання входять у вартість."
+description = "Волосся до підборіддя. Укладання входить у вартість."
 
 [[services]]
 id = "women_medium"
 title = "Жіноча стрижка (середнє волосся)"
 duration = 90
 price = 850
-description = "Волосся до плечей. Миття і укладання входять у вартість."
+description = "Волосся до плечей. Укладання входить у вартість."
 
 [[services]]
 id = "women_long"
 title = "Жіноча стрижка (довге волосся)"
 duration = 90
 price = 950
-description = "Волосся нижче плечей. Миття і укладання входять у вартість."
+description = "Волосся нижче плечей. Укладання входить у вартість."
 
 [[services]]
 id = "pixie"
@@ -182,6 +182,15 @@ title = "Стрижка чубчика"
 duration = 30
 price = 200
 
+[[services]]
+id = "wash"
+title = "Миття голови"
+duration = 15
+price = 150
+# Лише додатком (кнопка «➕» на картці запису), окремо не записують.
+addon_only = true
+addon_for = ["haircut", "combo", "kids", "buzz", "women_short", "women_medium", "women_long", "pixie", "bangs"]
+
 
 # ── Майстри ──────────────────────────────────────────────────────────
 # services = ["*"] — робить усі послуги; або перелік id: ["haircut", "beard"].
@@ -190,17 +199,30 @@ price = 200
 [[masters]]
 id = "andriy"
 name = "Андрій"
-services = ["*"]
+services = ["haircut", "beard", "combo", "kids", "buzz", "wash"]
 about = "Топ-барбер, 8 років досвіду, спеціаліст із фейдів."
 
 [[masters]]
 id = "oleg"
 name = "Олег"
-services = ["haircut", "beard", "combo", "buzz"]
+services = ["haircut", "beard", "combo", "kids", "buzz", "wash"]
 about = "Класичні стрижки і борода."
   [masters.schedule]
   mon = "off"
   sun = "11:00-17:00"
+
+
+[[masters]]
+id = "olena"
+name = "Олена"
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids", "haircut", "buzz", "wash"]
+about = "Жіночі, дитячі та класичні чоловічі стрижки."
+
+[[masters]]
+id = "maryna"
+name = "Марина"
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids", "haircut", "buzz", "wash"]
+about = "Жіночі, дитячі та класичні чоловічі стрижки."
 
 
 # ── Власні тексти (необов'язково) ────────────────────────────────────

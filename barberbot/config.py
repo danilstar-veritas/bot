@@ -296,6 +296,11 @@ class Service:
     duration: int
     price: float
     description: str = ""
+    addon_for: list[str] = field(default_factory=list)  # до яких послуг цю можна додати
+    # Прихована комбінація «послуга + додаток»: у списках не показується, записатися — лише через «➕ Додати».
+    hidden: bool = False
+    base_id: str = ""
+    addon_id: str = ""
 
 
 @dataclass
@@ -408,6 +413,20 @@ class Tenant:
         return f"{wd[:1].upper()}{wd[1:]} {d.day:02d}.{d.month:02d}"
 
     # ---- графік
+    def visible_services(self) -> list[Service]:
+        """Послуги для списків (без прихованих комбінацій «послуга + додаток»)."""
+        return [s for s in self.services.values() if not s.hidden]
+
+    def addons(self) -> list[Service]:
+        """Послуги, які можна додати до інших (кнопкою «➕» на картці запису)."""
+        return [s for s in self.services.values() if s.addon_for]
+
+    def addons_for(self, service_id: str, master_id: str) -> list[Service]:
+        """Комбінації «ця послуга + додаток», які робить цей майстер."""
+        master = self.masters.get(master_id)
+        return [s for s in self.services.values()
+                if s.base_id == service_id and master is not None and s.id in master.services]
+
     def masters_for(self, service_id: str) -> list[Master]:
         return [m for m in self.masters.values() if service_id in m.services]
 
@@ -576,7 +595,11 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
             duration=ss.int("duration", 60, 5, 600),
             price=ss.num("price", 0),
             description=ss.str("description"),
+            addon_for=[str(x) for x in ss.list("addon_for")],
+            hidden=ss.bool("addon_only", False),  # лише додатком до іншої послуги, окремо не записують
         )
+        if services[sid].hidden and not services[sid].addon_for:
+            raise ConfigError(f"{ss.where} → addon_only = true, але не вказано addon_for (до яких послуг додавати).")
 
     # Майстри
     masters: dict[str, Master] = {}
@@ -611,6 +634,24 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
     for sid, svc in services.items():
         if not any(sid in m.services for m in masters.values()):
             warnings.append(f"Послугу «{svc.title}» не виконує жоден майстер — на неї неможливо записатися.")
+
+    # Додаткові послуги: для кожної пари «послуга + додаток» — прихована комбінована послуга
+    # (сумарні тривалість і ціна). Її роблять ті майстри, що виконують обидві частини.
+    for addon in [s for s in services.values() if s.addon_for]:
+        for base_id in addon.addon_for:
+            base = services.get(base_id)
+            if base is None or base_id == addon.id or base.addon_for:
+                raise ConfigError(f"{where} → послуга «{addon.id}» → addon_for: «{base_id}» — "
+                                  f"має бути id іншої звичайної послуги.")
+            doers = [m for m in masters.values() if base_id in m.services and addon.id in m.services]
+            if not doers:
+                continue
+            combo = Service(id=f"{base_id}+{addon.id}", title=f"{base.title} + {addon.title}",
+                            duration=base.duration + addon.duration, price=base.price + addon.price,
+                            hidden=True, base_id=base_id, addon_id=addon.id)
+            services[combo.id] = combo
+            for m in doers:
+                m.services.append(combo.id)
 
     texts_override: dict[str, dict[str, str]] = {}
     raw_texts = raw.get("texts") or {}
