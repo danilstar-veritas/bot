@@ -401,6 +401,32 @@ class AdminTests(BotTestCase):
         self.assertIn("Статистика за 30 днів", stats)
         self.assertIn("не прийшли: 1", stats)
 
+    async def test_week_mentions_later_bookings_and_all_lists_them(self):
+        # Клієнт може записатися на 14 днів уперед, а /week показує лише 7 — запис через 13 днів не губиться.
+        client = self.make_client()
+        cancelled = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 11, 5, 12, 0), "buttons")
+        self.booking.cancel(cancelled["id"], "client")
+        self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")
+        far = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 11, 6, 12, 0), "buttons")
+
+        await self.send(msg(uid=ADMIN_ID, text="/week"))
+        week = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("27.10", week)
+        self.assertNotIn("06.11", week)
+        self.assertIn("Пізніше ще записів: 1 — /all", week)
+
+        await self.send(msg(uid=ADMIN_ID, text="/all"))
+        upcoming = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("Усі майбутні записи", upcoming)
+        self.assertIn("27.10", upcoming)
+        self.assertIn("06.11", upcoming)
+        # Скасовані — теж, з позначкою; у лічильнику дня лише активні.
+        self.assertIn("05.11</b> — 0 (скасовано: 1)", upcoming)
+        self.assertIn("❌ скасував клієнт", upcoming)
+        self.assertIn("06.11</b> — 1\n", upcoming)
+        self.assertNotIn("скасовано", week)  # /week — лише робочий розклад
+        self.assertEqual(self.db.get_booking(far["id"])["status"], "active")
+
     async def test_admin_cancel_notifies_client(self):
         client = self.make_client()
         b = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")

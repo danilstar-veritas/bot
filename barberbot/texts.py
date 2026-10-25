@@ -148,6 +148,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/today — записи на сьогодні\n"
                       "/tomorrow — записи на завтра\n"
                       "/week — записи на 7 днів\n"
+                      "/all — усі майбутні записи\n"
                       "/stats — статистика за 30 днів\n"
                       "/block — закрити час (вихідний, відпустка, запис по телефону)\n"
                       "/blocks — список закритого часу\n"
@@ -197,6 +198,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_week_day": "\n\n<b>{day}</b> — {count}",
         "adm_week_line": "\n{start} {master} · {service} · {client}",
         "adm_week_empty": "\n\nЗаписів немає.",
+        "adm_week_more": "\n\n➕ Пізніше ще записів: {count} — /all",
+        "adm_all_header": "🗓 <b>Усі майбутні записи</b>",
+        "adm_day_cancelled": " (скасовано: {count})",
+        "adm_cancelled_by_client": " — ❌ скасував клієнт",
+        "adm_cancelled_by_admin": " — ❌ скасував адміністратор",
         "adm_block_usage": "🔒 <b>Закрити час</b>\n\nФормат: <code>/block майстер дата [час] [коментар]</code>\n\n"
                            "Приклади:\n<code>/block {example} 30.10</code> — весь день\n"
                            "<code>/block {example} 30.10 14:00-16:00 запис по телефону</code>\n"
@@ -243,6 +249,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_today": "Записи на сьогодні",
         "cmd_tomorrow": "Записи на завтра",
         "cmd_week": "Записи на 7 днів",
+        "cmd_all": "Усі майбутні записи",
         "cmd_stats": "Статистика",
         "cmd_block": "Закрити час",
         "cmd_blocks": "Закритий час",
@@ -361,6 +368,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/today — записи на сегодня\n"
                       "/tomorrow — записи на завтра\n"
                       "/week — записи на 7 дней\n"
+                      "/all — все будущие записи\n"
                       "/stats — статистика за 30 дней\n"
                       "/block — закрыть время (выходной, отпуск, запись по телефону)\n"
                       "/blocks — список закрытого времени\n"
@@ -410,6 +418,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_week_day": "\n\n<b>{day}</b> — {count}",
         "adm_week_line": "\n{start} {master} · {service} · {client}",
         "adm_week_empty": "\n\nЗаписей нет.",
+        "adm_week_more": "\n\n➕ Позже ещё записей: {count} — /all",
+        "adm_all_header": "🗓 <b>Все будущие записи</b>",
+        "adm_day_cancelled": " (отменено: {count})",
+        "adm_cancelled_by_client": " — ❌ отменил клиент",
+        "adm_cancelled_by_admin": " — ❌ отменил администратор",
         "adm_block_usage": "🔒 <b>Закрыть время</b>\n\nФормат: <code>/block мастер дата [время] [комментарий]</code>\n\n"
                            "Примеры:\n<code>/block {example} 30.10</code> — весь день\n"
                            "<code>/block {example} 30.10 14:00-16:00 запись по телефону</code>\n"
@@ -455,6 +468,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_today": "Записи на сегодня",
         "cmd_tomorrow": "Записи на завтра",
         "cmd_week": "Записи на 7 дней",
+        "cmd_all": "Все будущие записи",
         "cmd_stats": "Статистика",
         "cmd_block": "Закрыть время",
         "cmd_blocks": "Закрытое время",
@@ -573,6 +587,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/today — today's bookings\n"
                       "/tomorrow — tomorrow's bookings\n"
                       "/week — bookings for 7 days\n"
+                      "/all — all upcoming bookings\n"
                       "/stats — 30-day statistics\n"
                       "/block — block time (day off, vacation, phone booking)\n"
                       "/blocks — list of blocked time\n"
@@ -621,6 +636,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_week_day": "\n\n<b>{day}</b> — {count}",
         "adm_week_line": "\n{start} {master} · {service} · {client}",
         "adm_week_empty": "\n\nNo bookings.",
+        "adm_week_more": "\n\n➕ {count} more later — /all",
+        "adm_all_header": "🗓 <b>All upcoming bookings</b>",
+        "adm_day_cancelled": " (cancelled: {count})",
+        "adm_cancelled_by_client": " — ❌ cancelled by client",
+        "adm_cancelled_by_admin": " — ❌ cancelled by admin",
         "adm_block_usage": "🔒 <b>Block time</b>\n\nFormat: <code>/block barber date [time] [note]</code>\n\n"
                            "Examples:\n<code>/block {example} 30.10</code> — whole day\n"
                            "<code>/block {example} 30.10 14:00-16:00 phone booking</code>\n"
@@ -666,6 +686,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_today": "Today's bookings",
         "cmd_tomorrow": "Tomorrow's bookings",
         "cmd_week": "Bookings for 7 days",
+        "cmd_all": "All upcoming bookings",
         "cmd_stats": "Statistics",
         "cmd_block": "Block time",
         "cmd_blocks": "Blocked time",

@@ -25,7 +25,7 @@ from .util import is_affirmative, normalize_phone, short
 
 log = logging.getLogger("barberbot")
 
-ADMIN_COMMANDS = ["start", "admin", "today", "tomorrow", "week", "stats", "block", "blocks", "pause", "resume",
+ADMIN_COMMANDS = ["start", "admin", "today", "tomorrow", "week", "all", "stats", "block", "blocks", "pause", "resume",
                   "reload", "myid"]
 PENDING_TTL = timedelta(minutes=30)
 POLL_TIMEOUT = 25
@@ -1148,6 +1148,8 @@ class BotApp:
             await self.admin_day(ctx, today if cmd == "today" else today + timedelta(days=1), None)
         elif cmd == "week":
             await ctx.send(self.render_week(tenant, today))
+        elif cmd == "all":
+            await ctx.send(self.render_upcoming(tenant, today))
         elif cmd == "stats":
             await ctx.send(ctx.at("adm_stats", **compute_stats(ctx.db, tenant, self.settings)))
         elif cmd == "block":
@@ -1194,23 +1196,46 @@ class BotApp:
             text += ctx.at("adm_legend")
         await ctx.show(message_id, text, inline_kb(buttons) if buttons else None)
 
-    def render_week(self, tenant: Tenant, start_day: date) -> str:
+    def _active_from(self, tenant: Tenant, start_day: date, days: int | None = None,
+                     statuses: tuple[str, ...] = ("active",)):
+        """Записи від початку start_day: на days днів або всі майбутні."""
+        start = datetime.combine(start_day, time.min)
+        end = start + timedelta(days=days if days is not None else 3650)
+        return self.db.bookings_between(tenant.slug, start, end, statuses)
+
+    def _render_by_day(self, tenant: Tenant, header: str, rows) -> str:
         lang = tenant.lang
-        text = tenant.t(lang, "adm_week_header")
-        total = 0
-        for i in range(7):
-            day = start_day + timedelta(days=i)
-            rows = self.bookings[tenant.slug].day_bookings(day, include_noshow=False)
-            if not rows:
-                continue
-            total += len(rows)
-            text += tenant.t(lang, "adm_week_day", day=tenant.day_label(day, lang), count=len(rows))
-            for r in rows:
+        text = tenant.t(lang, header)
+        by_day: dict[str, list] = {}
+        for r in rows:
+            by_day.setdefault(r["start_at"][:10], []).append(r)
+        for day_str, day_rows in by_day.items():
+            day = date.fromisoformat(day_str)
+            active = sum(1 for r in day_rows if r["status"] == "active")
+            text += tenant.t(lang, "adm_week_day", day=tenant.day_label(day, lang), count=active)
+            if active < len(day_rows):
+                text += tenant.t(lang, "adm_day_cancelled", count=len(day_rows) - active)
+            for r in day_rows:
                 text += tenant.t(lang, "adm_week_line", start=r["start_at"][11:16], master=r["master_name"],
                                  service=r["service_title"], client=self.client_label(tenant, r))
-        if not total:
+                if r["status"] == "cancelled":
+                    by = "admin" if r["cancelled_by"] == "admin" else "client"
+                    text += tenant.t(lang, f"adm_cancelled_by_{by}")
+        if not rows:
             text += tenant.t(lang, "adm_week_empty")
         return text
+
+    def render_week(self, tenant: Tenant, start_day: date) -> str:
+        text = self._render_by_day(tenant, "adm_week_header", self._active_from(tenant, start_day, 7))
+        # Клієнти можуть записуватися далі ніж на тиждень (days_ahead) — не ховаємо ці записи мовчки.
+        later = len(self._active_from(tenant, start_day + timedelta(days=7)))
+        if later:
+            text += tenant.t(tenant.lang, "adm_week_more", count=later)
+        return text
+
+    def render_upcoming(self, tenant: Tenant, start_day: date) -> str:
+        rows = self._active_from(tenant, start_day, statuses=("active", "cancelled"))
+        return self._render_by_day(tenant, "adm_all_header", rows)
 
     def _block_usage(self, tenant: Tenant) -> str:
         example = next(iter(tenant.masters))
