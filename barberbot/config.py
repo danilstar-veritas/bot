@@ -305,6 +305,7 @@ class Service:
     hidden: bool = False
     base_id: str = ""
     addon_id: str = ""
+    config_price: float | None = None  # ціна з файлу налаштувань (price — діюча, адмін може змінити в /prices)
 
     @property
     def label(self) -> str:
@@ -642,6 +643,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
             addon_for=[str(x) for x in ss.list("addon_for")],
             hidden=ss.bool("addon_only", False),  # лише додатком до іншої послуги, окремо не записують
         )
+        services[sid].config_price = services[sid].price
         if services[sid].hidden and not services[sid].addon_for:
             raise ConfigError(f"{ss.where} → addon_only = true, але не вказано addon_for (до яких послуг додавати).")
 

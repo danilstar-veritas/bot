@@ -6,6 +6,7 @@ AdminPanel — домішка до BotApp: методи працюють із б
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,7 @@ from .db import parse_dt
 from .telegram import ibtn, inline_kb
 from .texts import Raw
 from .ui import Expired, _rows
+from .util import short
 from .xlsx import build_xlsx
 
 if TYPE_CHECKING:
@@ -256,6 +258,94 @@ class AdminPanel:
             "client_id": c["id"], "name": self._client_name(ctx.tenant, c), "phone": c["phone"],
             "tg_id": c["tg_id"] if c["tg_id"] > 0 else None, "note": ""})
         await self.admin_book_services(ctx, None)
+
+    # ================================================================ ціни
+    def apply_prices(self, tenant) -> None:
+        """Ціни, змінені адміном у /prices (kv price:{id}), поверх цін із файлу; комбінації «послуга + додаток»
+        перераховуються з діючих цін."""
+        overrides = self.db.kv_prefix(tenant.slug, "price:")
+        for s in tenant.services.values():
+            if s.base_id:
+                continue
+            raw = overrides.get(f"price:{s.id}")
+            try:
+                s.price = float(raw) if raw is not None else s.config_price
+            except ValueError:
+                s.price = s.config_price
+        for s in tenant.services.values():
+            if s.base_id and s.base_id in tenant.services and s.addon_id in tenant.services:
+                s.price = tenant.services[s.base_id].price + tenant.services[s.addon_id].price
+
+    def _editable_services(self, tenant) -> list:
+        return [s for s in tenant.services.values() if not s.base_id]
+
+    async def admin_prices(self, ctx: Ctx, message_id: int | None, prefix: str = "") -> None:
+        tenant = ctx.tenant
+        buttons, changed = [], 0
+        for s in self._editable_services(tenant):
+            mark = "✏️ " if s.price != s.config_price else ""
+            changed += bool(mark)
+            buttons.append([ibtn(short(f"{mark}{s.label} — {tenant.price_str(s.price)}", 60), f"aPe:{s.id}")])
+        text = (prefix + "\n\n" if prefix else "") + ctx.at("adm_prices")
+        if changed:
+            text += ctx.at("adm_prices_changed")
+        await ctx.show(message_id, text, inline_kb(buttons))
+
+    def _price_service(self, ctx: Ctx, service_id: str):
+        s = ctx.tenant.services.get(service_id)
+        if s is None or s.base_id:
+            raise Expired()
+        return s
+
+    async def admin_price_ask(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
+        tenant = ctx.tenant
+        s = self._price_service(ctx, service_id)
+        self.states[ctx.key] = ("admin_price", {"service_id": s.id})
+        text = ctx.at("adm_price_ask", title=s.title, price=tenant.price_str(s.price))
+        rows = []
+        if s.price != s.config_price:
+            text += ctx.at("adm_price_file", price=tenant.price_str(s.config_price))
+            rows.append([ibtn(ctx.at("btn_adm_price_reset", price=tenant.price_str(s.config_price)), f"aPr:{s.id}")])
+        rows.append([ibtn(ctx.at("btn_back"), "aPl")])
+        await ctx.show(message_id, text, inline_kb(rows))
+
+    async def admin_price_input(self, ctx: Ctx, text: str, data: dict) -> bool:
+        """Адмін написав нову ціну. False — це не ціна, а кнопка меню: стан скидаємо, обробляємо як зазвичай."""
+        if self.menu_key(ctx, text) is not None or not text:
+            self.states.pop(ctx.key, None)
+            return False
+        cleaned = re.sub(r"[^\d.,]", "", text).replace(",", ".")
+        try:
+            price = float(cleaned)
+        except ValueError:
+            price = -1
+        if not 0 <= price <= 1_000_000 or not any(c.isdigit() for c in text):
+            await ctx.send(ctx.at("adm_price_bad"))
+            return True
+        await self.admin_price_set(ctx, data.get("service_id", ""), round(price, 2), None)
+        return True
+
+    async def admin_price_set(self, ctx: Ctx, service_id: str, price: float | None, message_id: int | None) -> None:
+        """price=None — повернути ціну з файлу налаштувань."""
+        tenant = ctx.tenant
+        s = self._price_service(ctx, service_id)
+        self.states.pop(ctx.key, None)
+        old = s.price
+        if price is None or price == s.config_price:
+            ctx.db.kv_delete(tenant.slug, f"price:{s.id}")
+        else:
+            ctx.db.kv_set(tenant.slug, f"price:{s.id}", f"{price:g}")
+        self.apply_prices(tenant)
+        done = ctx.at("adm_price_done", title=s.title, old=tenant.price_str(old), new=tenant.price_str(s.price))
+        if any(c.base_id == s.id or c.addon_id == s.id for c in tenant.services.values()):
+            done += ctx.at("adm_price_combos")
+        await self.admin_prices(ctx, message_id, prefix=done)
+        if old != s.price:
+            note = ctx.at("adm_price_changed_note", admin=self.client_label(tenant, ctx.client), title=s.title,
+                          old=tenant.price_str(old), new=tenant.price_str(s.price))
+            for admin in tenant.admins:
+                if admin != ctx.chat_id:
+                    await self.send(tenant, admin, note)
 
     # ================================================================ Excel
     async def admin_export(self, ctx: Ctx, args: str) -> None:

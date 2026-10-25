@@ -186,6 +186,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/block — закрити час (вихідний, відпустка, запис по телефону)\n"
                       "/blocks — список закритого часу\n"
                       "/masters — майстри в боті: запросити, відключити\n"
+                      "/prices — змінити ціни на послуги\n"
                       "/pause — вимкнути AI: усі повідомлення клієнтів ідуть вам\n"
                       "/resume — увімкнути AI назад\n"
                       "/reload — перечитати налаштування з файлу\n"
@@ -406,6 +407,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_reload": "Оновити налаштування",
         "cmd_myid": "Мій Telegram ID",
         "cmd_masters": "Майстри в боті",
+        "cmd_prices": "Змінити ціни",
+        "adm_prices": "💰 <b>Ціни на послуги</b>\nНатисніть послугу, щоб змінити ціну 👇",
+        "adm_prices_changed": "\n\n✏️ — ціну змінено тут, у боті (у файлі налаштувань стара).",
+        "adm_price_ask": "💰 <b>{title}</b>\nЗараз: <b>{price}</b>\n\nНапишіть нову ціну числом, наприклад 650.",
+        "adm_price_file": "\nУ файлі налаштувань: {price}.",
+        "btn_adm_price_reset": "↩️ Повернути {price}",
+        "adm_price_bad": "Не схоже на ціну 🤔 Напишіть лише число, наприклад 650. Скасувати — /cancel",
+        "adm_price_done": "✅ <b>{title}</b>: {old} → <b>{new}</b>\nНову ціну вже бачать клієнти й AI. "
+                          "Записи, зроблені раніше, лишаються за старою ціною.",
+        "adm_price_combos": "\nЦіни комбінацій із додатками перераховано.",
+        "adm_price_changed_note": "💰 {admin} змінив ціну: <b>{title}</b> {old} → <b>{new}</b>",
         "cmd_my": "Мій день",
         "cmd_myweek": "Мій тиждень",
         "cmd_off": "Закрити час",
@@ -624,6 +636,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/block — закрыть время (выходной, отпуск, запись по телефону)\n"
                       "/blocks — список закрытого времени\n"
                       "/masters — мастера в боте: пригласить, отключить\n"
+                      "/prices — изменить цены на услуги\n"
                       "/pause — выключить AI: все сообщения клиентов идут вам\n"
                       "/resume — включить AI обратно\n"
                       "/reload — перечитать настройки из файла\n"
@@ -843,6 +856,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_reload": "Обновить настройки",
         "cmd_myid": "Мой Telegram ID",
         "cmd_masters": "Мастера в боте",
+        "cmd_prices": "Изменить цены",
+        "adm_prices": "💰 <b>Цены на услуги</b>\nНажмите услугу, чтобы изменить цену 👇",
+        "adm_prices_changed": "\n\n✏️ — цена изменена здесь, в боте (в файле настроек старая).",
+        "adm_price_ask": "💰 <b>{title}</b>\nСейчас: <b>{price}</b>\n\nНапишите новую цену числом, например 650.",
+        "adm_price_file": "\nВ файле настроек: {price}.",
+        "btn_adm_price_reset": "↩️ Вернуть {price}",
+        "adm_price_bad": "Не похоже на цену 🤔 Напишите только число, например 650. Отменить — /cancel",
+        "adm_price_done": "✅ <b>{title}</b>: {old} → <b>{new}</b>\nНовую цену уже видят клиенты и AI. "
+                          "Записи, сделанные раньше, остаются по старой цене.",
+        "adm_price_combos": "\nЦены комбинаций с дополнениями пересчитаны.",
+        "adm_price_changed_note": "💰 {admin} изменил цену: <b>{title}</b> {old} → <b>{new}</b>",
         "cmd_my": "Мой день",
         "cmd_myweek": "Моя неделя",
         "cmd_off": "Закрыть время",
@@ -1061,6 +1085,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/block — block time (day off, vacation, phone booking)\n"
                       "/blocks — list of blocked time\n"
                       "/masters — masters in the bot: invite, disconnect\n"
+                      "/prices — change service prices\n"
                       "/pause — turn AI off: all client messages go to you\n"
                       "/resume — turn AI back on\n"
                       "/reload — reload settings from the file\n"
@@ -1279,6 +1304,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_reload": "Reload settings",
         "cmd_myid": "My Telegram ID",
         "cmd_masters": "Masters in the bot",
+        "cmd_prices": "Change prices",
+        "adm_prices": "💰 <b>Service prices</b>\nTap a service to change its price 👇",
+        "adm_prices_changed": "\n\n✏️ — price changed here in the bot (the settings file has the old one).",
+        "adm_price_ask": "💰 <b>{title}</b>\nNow: <b>{price}</b>\n\nSend the new price as a number, e.g. 650.",
+        "adm_price_file": "\nIn the settings file: {price}.",
+        "btn_adm_price_reset": "↩️ Restore {price}",
+        "adm_price_bad": "That doesn't look like a price 🤔 Send just a number, e.g. 650. Cancel — /cancel",
+        "adm_price_done": "✅ <b>{title}</b>: {old} → <b>{new}</b>\nClients and the AI already see the new price. "
+                          "Earlier bookings keep the old price.",
+        "adm_price_combos": "\nAdd-on combination prices recalculated.",
+        "adm_price_changed_note": "💰 {admin} changed a price: <b>{title}</b> {old} → <b>{new}</b>",
         "cmd_my": "My day",
         "cmd_myweek": "My week",
         "cmd_off": "Block time",

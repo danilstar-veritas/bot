@@ -31,7 +31,7 @@ from .ui import Expired, _d, _int, _rows, _t
 log = logging.getLogger("barberbot")
 
 ADMIN_COMMANDS = ["start", "admin", "book", "today", "tomorrow", "day", "week", "all", "find", "stats", "export",
-                  "block", "blocks", "masters", "pause", "resume", "reload", "myid"]
+                  "block", "blocks", "masters", "prices", "pause", "resume", "reload", "myid"]
 PENDING_TTL = timedelta(minutes=30)
 POLL_TIMEOUT = 25
 
@@ -170,6 +170,8 @@ class BotApp(AdminPanel, MasterPanel):
         factory = api_factory or (lambda t: TelegramAPI(t.bot_token, settings.telegram_api_base))
         self.apis = {slug: factory(t) for slug, t in self.tenants.items()}
         self.bookings = {slug: BookingService(t, db) for slug, t in self.tenants.items()}
+        for t in self.tenants.values():
+            self.apply_prices(t)
         self.agent = Agent(settings, llm) if llm is not None else None
         # Крок діалогу користувача: (вид, дані). Зберігається в базі — переживає перезапуск.
         self.states = StateStore(db, "state", timedelta(hours=24), lambda v: list(v), lambda v: tuple(v))
@@ -433,6 +435,9 @@ class BotApp(AdminPanel, MasterPanel):
             elif kind == "admin_book_client" and ctx.is_admin:
                 await self.admin_book_client_info(ctx, msg, data)
                 return
+            elif kind == "admin_price" and ctx.is_admin:
+                if await self.admin_price_input(ctx, text, data):
+                    return
 
         if ctx.is_admin and msg.get("reply_to_message"):
             client_id = db.get_relay(tenant.slug, ctx.chat_id, msg["reply_to_message"].get("message_id"))
@@ -1409,6 +1414,9 @@ class BotApp(AdminPanel, MasterPanel):
             await self.admin_blocks(ctx, None)
         elif cmd == "masters":
             await self.admin_masters(ctx, None)
+        elif cmd == "prices":
+            self.states.pop(ctx.key, None)
+            await self.admin_prices(ctx, None)
         elif cmd == "pause":
             ctx.db.kv_set(tenant.slug, "paused", "1")
             await ctx.send(ctx.at("adm_paused"))
@@ -1816,6 +1824,7 @@ class BotApp(AdminPanel, MasterPanel):
             return
         token_changed = new.bot_token != old.bot_token
         new.bot_token = old.bot_token
+        self.apply_prices(new)
         self.tenants[slug] = new
         self.bookings[slug] = BookingService(new, self.db)
         text = new.t(new.lang, "adm_reloaded", services=len(new.services), masters=len(new.masters))
@@ -1944,6 +1953,14 @@ class BotApp(AdminPanel, MasterPanel):
             ctx.db.delete_block(tenant.slug, _int(a[0]))
             await self.admin_blocks(ctx, message_id)
             return ctx.at("adm_block_deleted")
+        elif op == "aPl":
+            if self.states.get(ctx.key, ("", {}))[0] == "admin_price":
+                self.states.pop(ctx.key, None)
+            await self.admin_prices(ctx, message_id)
+        elif op == "aPe" and len(a) == 1:
+            await self.admin_price_ask(ctx, a[0], message_id)
+        elif op == "aPr" and len(a) == 1:
+            await self.admin_price_set(ctx, a[0], None, message_id)
         elif op == "aM":
             await self.admin_masters(ctx, message_id)
         elif op == "aMi" and len(a) == 1:

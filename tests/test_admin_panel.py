@@ -9,10 +9,11 @@ import xml.etree.ElementTree as ET
 import zipfile
 from datetime import datetime
 
+from barberbot.app import BotApp
 from barberbot.scheduler import Scheduler
 from barberbot.xlsx import build_xlsx, column_name
 
-from .helpers import ADMIN_ID, CLIENT_ID, cb, msg, set_time
+from .helpers import ADMIN_ID, CLIENT_ID, cb, make_tenant, msg, set_time
 from .test_app import BotTestCase
 
 
@@ -200,6 +201,67 @@ class AdminPanelTests(BotTestCase):
             self.assertIn(value, sheet)
         await self.admin("/export abc")
         self.assertIn("/export 90", self.last()["text"])
+
+
+class PriceTests(BotTestCase):
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        # Додаток «Миття» до стрижки — щоб перевірити перерахунок комбінації.
+        self.tenant = make_tenant(extra='\n[[services]]\nid = "wash"\ntitle = "Миття"\nduration = 15\nprice = 150\n'
+                                        'addon_for = ["haircut"]\n')
+        self.slug = self.tenant.slug
+        self.app = BotApp(self.settings, [self.tenant], self.db, None, api_factory=lambda t: self.tg)
+        self.booking = self.app.bookings[self.slug]
+
+    def kb(self) -> list[tuple[str, str]]:
+        return [(b["text"], b["callback_data"]) for b in self.tg.buttons(self.tg.last(ADMIN_ID))]
+
+    async def test_change_and_restore_price(self):
+        await self.send(msg(uid=ADMIN_ID, text="/prices"))
+        self.assertIn(("Чоловіча стрижка — 500 грн", "aPe:haircut"), self.kb())
+        self.assertIn(("Миття — 150 грн", "aPe:wash"), self.kb())
+        self.assertNotIn("aPe:haircut+wash", [d for _, d in self.kb()])  # комбінації — автоматично
+
+        await self.send(cb("aPe:haircut", uid=ADMIN_ID))
+        self.assertIn("Зараз: <b>500 грн</b>", self.tg.last(ADMIN_ID)["text"])
+        await self.send(msg(uid=ADMIN_ID, text="дорого"))
+        self.assertIn("Не схоже на ціну", self.tg.last(ADMIN_ID)["text"])
+        await self.send(msg(uid=ADMIN_ID, text="700 грн"))
+        text = self.tg.last(ADMIN_ID)["text"]
+        self.assertIn("<b>Чоловіча стрижка</b>: 500 грн → <b>700 грн</b>", text)
+        self.assertIn("комбінацій із додатками перераховано", text)
+        self.assertIn(("✏️ Чоловіча стрижка — 700 грн", "aPe:haircut"), self.kb())
+        self.assertEqual(self.tenant.services["haircut+wash"].price, 850)
+
+        # Клієнт бачить нову ціну, новий запис — за новою ціною.
+        await self.send(msg(text="💈 Послуги і ціни"))
+        self.assertIn("700 грн", self.tg.last(CLIENT_ID)["text"])
+        client = self.make_client()
+        b = self.booking.create(client["id"], "haircut", "andriy", datetime(2026, 10, 27, 12, 0), "buttons")
+        self.assertEqual(b["price"], 700)
+
+        # Після перезапуску бота й /reload ціна лишається.
+        app2 = BotApp(self.settings, [make_tenant()], self.db, None, api_factory=lambda t: self.tg)
+        self.assertEqual(app2.tenants[self.slug].services["haircut"].price, 700)
+        await self.send(msg(uid=ADMIN_ID, text="/reload"))
+        self.assertEqual(self.app.tenants[self.slug].services["haircut"].price, 700)
+
+        await self.send(cb("aPe:haircut", uid=ADMIN_ID))
+        self.assertIn("У файлі налаштувань: 500 грн", self.tg.last(ADMIN_ID)["text"])
+        await self.send(cb("aPr:haircut", uid=ADMIN_ID))
+        self.assertEqual(self.app.tenants[self.slug].services["haircut"].price, 500)
+        self.assertIsNone(self.db.kv_get(self.slug, "price:haircut"))
+        self.assertIn(("Чоловіча стрижка — 500 грн", "aPe:haircut"), self.kb())
+
+    async def test_state_does_not_swallow_menu_and_clients_cannot(self):
+        await self.send(cb("aPe:haircut", uid=ADMIN_ID))
+        await self.send(msg(uid=ADMIN_ID, text="📍 Контакти"))
+        self.assertIn("вул. Тестова", self.tg.last(ADMIN_ID)["text"])
+        self.assertIsNone(self.app.states.get((self.slug, ADMIN_ID)))
+        await self.send(cb("aPe:haircut"))
+        self.assertEqual(self.tg.of("answerCallbackQuery")[-1]["text"], "Немає доступу")
+        await self.send(msg(text="/prices"))
+        self.assertIn("Не знаю такої команди", self.tg.last(CLIENT_ID)["text"])
 
 
 class XlsxTests(unittest.TestCase):
