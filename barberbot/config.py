@@ -368,6 +368,7 @@ class Tenant:
     prepay_hours: int = 2
     max_per_week: int = 0  # скільки записів один клієнт може мати на календарний тиждень (0 — без обмеження)
     report_at: time | None = None  # коли надсилати власнику вечірній підсумок дня (None — не надсилати)
+    master_heads_up_min: int = 15  # за скільки хвилин нагадати майстру про клієнта (0 — не нагадувати)
 
     @property
     def prepay_enabled(self) -> bool:
@@ -751,6 +752,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         prepay_hours=pp.int("pay_within_hours", 2, 1, 72),
         max_per_week=b.int("max_per_week_per_client", 0, 0, 100),
         report_at=report_at,
+        master_heads_up_min=n.int("master_heads_up_min", 15, 0, 240),
     )
 
 

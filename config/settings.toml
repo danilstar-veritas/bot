@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────────────────────────────
 
 # Який AI використовувати: "anthropic" (Claude, платно) або "gemini" (Google, є безкоштовний рівень для тестів).
-provider = "gemini"
+provider = "anthropic"
 
 # Ключ Gemini API (лише для provider = "gemini"): https://aistudio.google.com → Get API key.
 # Можна не писати сюди, а задати змінну середовища GEMINI_API_KEY.

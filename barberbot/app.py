@@ -21,6 +21,7 @@ from .agent import Agent, add_note, history_transcript
 from .booking import BookingError, BookingService
 from .config import RANGE_RE, ConfigError, Settings, Tenant, fmt_hhmm, load_tenant, parse_hhmm, parse_user_date
 from .db import DB, dt_str, parse_dt
+from .masters import MASTER_COMMANDS, MasterPanel
 from .stats import compute_stats
 from .telegram import NetworkError, TelegramAPI, TelegramError, chunk_text, ibtn, inline_kb, reply_kb, url_btn
 from .texts import Raw
@@ -30,7 +31,7 @@ from .ui import Expired, _d, _int, _rows, _t
 log = logging.getLogger("barberbot")
 
 ADMIN_COMMANDS = ["start", "admin", "book", "today", "tomorrow", "day", "week", "all", "find", "stats", "export",
-                  "block", "blocks", "pause", "resume", "reload", "myid"]
+                  "block", "blocks", "masters", "pause", "resume", "reload", "myid"]
 PENDING_TTL = timedelta(minutes=30)
 POLL_TIMEOUT = 25
 
@@ -107,6 +108,7 @@ class Ctx:
         self.client = self.db.upsert_client(tenant.slug, self.user_id, user.get("first_name"), user.get("last_name"),
                                             user.get("username"), self.lang, tenant.now())
         self.is_admin = self.user_id in tenant.admins
+        self.master_id = app.master_of(tenant, self.user_id)  # id майстра, якщо це підключений майстер
 
     @property
     def key(self) -> tuple[str, int]:
@@ -160,7 +162,7 @@ class Ctx:
             pass
 
 
-class BotApp(AdminPanel):
+class BotApp(AdminPanel, MasterPanel):
     def __init__(self, settings: Settings, tenants: list[Tenant], db: DB, llm=None, api_factory=None):
         self.settings = settings
         self.db = db
@@ -276,13 +278,13 @@ class BotApp(AdminPanel):
                            commands=[{"command": "start", "description": tenant.t(tenant.lang, "cmd_start")}])
         except (TelegramError, NetworkError) as e:
             log.warning("[%s] setMyCommands: %s", tenant.name, e)
-        admin_cmds = [{"command": c, "description": tenant.t(tenant.lang, f"cmd_{c}")} for c in ADMIN_COMMANDS]
-        for admin in tenant.admins:
+        masters = set(self.master_links(tenant).values())
+        for chat_id in dict.fromkeys([*tenant.admins, *masters]):
             try:
-                await api.call("setMyCommands", commands=admin_cmds, scope={"type": "chat", "chat_id": admin})
+                await self.chat_commands(tenant, chat_id, chat_id in masters)
             except (TelegramError, NetworkError):
                 log.info("[%s] Адмін %s ще не натиснув /start у боті — меню команд з'явиться пізніше",
-                         tenant.name, admin)
+                         tenant.name, chat_id)
 
     async def safe_handle(self, slug: str, update: dict) -> None:
         try:
@@ -353,6 +355,8 @@ class BotApp(AdminPanel):
         return last
 
     def main_kb(self, ctx: Ctx) -> dict:
+        if ctx.master_id:
+            return self.master_kb(ctx)
         return reply_kb([[ctx.t("btn_book"), ctx.t("btn_my")], [ctx.t("btn_prices"), ctx.t("btn_contacts")]])
 
     def phone_kb(self, ctx: Ctx) -> dict:
@@ -440,6 +444,12 @@ class BotApp(AdminPanel):
             await self.save_contact(ctx, msg["contact"])
             return
 
+        if ctx.master_id:
+            master_menu = self.master_menu_key(ctx, text)
+            if master_menu is not None:
+                await self.run_master_menu(ctx, master_menu)
+                return
+
         menu = self.menu_key(ctx, text)
         if menu is not None:
             self.pending.pop((tenant.slug, ctx.client_id), None)
@@ -478,7 +488,10 @@ class BotApp(AdminPanel):
         cmd, _, args = text.partition(" ")
         cmd = cmd.split("@", 1)[0].lower().lstrip("/")
         args = args.strip()
-        if cmd in ("start", "help", "menu"):
+        if cmd == "start" and args.startswith("m") and len(args) > 1:  # запрошення майстра: t.me/бот?start=m…
+            self.states.pop(ctx.key, None)
+            await self.master_join(ctx, args[1:])
+        elif cmd in ("start", "help", "menu"):
             self.states.pop(ctx.key, None)
             await self.cmd_start(ctx)
         elif cmd == "cancel":
@@ -486,12 +499,20 @@ class BotApp(AdminPanel):
             await ctx.send(ctx.t("state_cleared"), self.main_kb(ctx))
         elif cmd == "myid":
             await ctx.send(ctx.t("myid", id=ctx.user_id))
+        elif ctx.master_id and cmd in MASTER_COMMANDS:
+            await self.master_command(ctx, cmd)
         elif ctx.is_admin and cmd in ADMIN_COMMANDS:
             await self.admin_command(ctx, cmd, args)
         else:
             await ctx.send(ctx.t("unknown_command"), self.main_kb(ctx))
 
     async def cmd_start(self, ctx: Ctx) -> None:
+        if ctx.master_id:
+            text = self.master_start_text(ctx)
+            if ctx.is_admin:
+                text += ctx.t("start_admin_hint")
+            await ctx.send(text, self.main_kb(ctx))
+            return
         ai = self.ai_status(ctx.tenant) in ("on", "paused")
         text = ctx.t("start" if ai else "start_no_ai", name=ctx.tenant.name)
         if ctx.is_admin:
@@ -587,7 +608,8 @@ class BotApp(AdminPanel):
         tenant = ctx.tenant
         ctx.db.log_event(tenant.slug, ctx.client_id, "ai_message", tenant.now())
         async with self.typing(ctx):
-            result = await self.agent.reply(tenant, ctx.booking, ctx.db, ctx.client, short(text, 1500))
+            result = await self.agent.reply(tenant, ctx.booking, ctx.db, ctx.client, short(text, 1500),
+                                            master_brief=self.master_ai_brief(ctx) if ctx.master_id else None)
         if result.error:
             log.warning("[%s] AI: %s", tenant.name, result.error)
             ctx.db.log_event(tenant.slug, ctx.client_id, "ai_error", tenant.now(), {"error": short(result.error, 500)})
@@ -782,6 +804,10 @@ class BotApp(AdminPanel):
             if not ctx.is_admin:
                 return ctx.t("alert_no_access")
             return await self.admin_callback(ctx, op, a, message_id)
+        if op.startswith("m") and op != "menu":
+            if not ctx.master_id:
+                return ctx.t("alert_no_access")
+            return await self.master_callback(ctx, op, a, message_id)
         if op == "menu":
             if a == ["book"]:
                 await self.flow_services(ctx, message_id)
@@ -1060,6 +1086,7 @@ class BotApp(AdminPanel):
                                deadline=self._when(tenant, ctx.booking.prepay_deadline(b), tenant.lang))
                 kb = inline_kb([[ibtn(ctx.at("btn_adm_prepay_ok"), f"aPy:{b['id']}")]])
             await self.notify_admins(tenant, note, kb, client_id=ctx.client_id)
+        await self.notify_master(tenant, b, "mst_new")
 
     # ---------------------------------------------------------------- передоплата
     def _when(self, tenant: Tenant, moment: datetime, lang: str) -> str:
@@ -1218,6 +1245,7 @@ class BotApp(AdminPanel):
             "adm_cancelled", client=self.client_label(tenant, ctx.client), service=b["service_title"],
             master=b["master_name"], day=tenant.day_label(start.date(), tenant.lang), time=fmt_hhmm(start)),
             client_id=ctx.client_id)
+        await self.notify_master(tenant, b, "mst_cancelled")
 
     # ---------------------------------------------------------------- перенесення
     def _resched_master(self, ctx: Ctx, b) -> str:
@@ -1313,6 +1341,7 @@ class BotApp(AdminPanel):
             master=new["master_name"],
             old=f"{tenant.day_label(old_start.date(), tenant.lang)}, {fmt_hhmm(old_start)} ({old['master_name']})",
             new=f"{tenant.day_label(start.date(), tenant.lang)}, {fmt_hhmm(start)}"), client_id=ctx.client_id)
+        await self.notify_master_resched(tenant, old, new)
 
     # ---------------------------------------------------------------- нагадування
     def reminder_text(self, tenant: Tenant, b, lang: str, confirmed: bool = False) -> str:
@@ -1378,6 +1407,8 @@ class BotApp(AdminPanel):
             await self.admin_block(ctx, args)
         elif cmd == "blocks":
             await self.admin_blocks(ctx, None)
+        elif cmd == "masters":
+            await self.admin_masters(ctx, None)
         elif cmd == "pause":
             ctx.db.kv_set(tenant.slug, "paused", "1")
             await ctx.send(ctx.at("adm_paused"))
@@ -1699,6 +1730,7 @@ class BotApp(AdminPanel):
             for admin in tenant.admins:
                 if admin != ctx.chat_id:
                     await self.send(tenant, admin, text)
+        await self.notify_master(tenant, b, "mst_new")
 
     def _block_usage(self, tenant: Tenant) -> str:
         example = next(iter(tenant.masters))
@@ -1854,6 +1886,7 @@ class BotApp(AdminPanel):
             offline = client is None or client["tg_id"] < 0
             await ctx.show(message_id, ctx.at("adm_cancelled_done_offline" if offline else "adm_cancelled_done",
                                               booking=Raw(self._booking_summary(tenant, b, client))))
+            await self.notify_master(tenant, b, "mst_cancelled")
             if client and not offline and not client["blocked"]:
                 lang = client["lang"] or tenant.lang
                 start = parse_dt(b["start_at"])
@@ -1911,6 +1944,12 @@ class BotApp(AdminPanel):
             ctx.db.delete_block(tenant.slug, _int(a[0]))
             await self.admin_blocks(ctx, message_id)
             return ctx.at("adm_block_deleted")
+        elif op == "aM":
+            await self.admin_masters(ctx, message_id)
+        elif op == "aMi" and len(a) == 1:
+            await self.admin_master_invite(ctx, a[0])
+        elif op in ("aMu", "aMuy") and len(a) == 1:
+            await self.admin_master_unlink(ctx, a[0], message_id, confirmed=op == "aMuy")
         elif op == "ax":
             await ctx.clear_kb(message_id)
         else:

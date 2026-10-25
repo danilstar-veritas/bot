@@ -42,6 +42,8 @@ class Scheduler:
                 await self.reminders(slug)
                 await self.nudges(slug)
                 await self.digest(slug)
+                await self.master_digest(slug)
+                await self.master_heads_up(slug)
                 await self.evening_report(slug)
             except Exception:
                 log.exception("Помилка планувальника для %s", slug)
@@ -77,6 +79,7 @@ class Scheduler:
                 await app.send(tenant, b["tg_id"], tenant.t(
                     lang, "client_cancelled_unpaid", service=b["service_title"], master=b["master_name"],
                     day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
+            await app.notify_master(tenant, b, "mst_cancelled")
             client = db.get_client(b["client_id"])
             await app.notify_admins(tenant, tenant.t(tenant.lang, "adm_cancelled_unpaid", hours=tenant.prepay_hours,
                                                      booking=Raw(app._booking_summary(tenant, b, client))))
@@ -160,6 +163,57 @@ class Scheduler:
         body = app.render_day(tenant, now.date(), rows)
         for admin in tenant.admins:
             await app.send(tenant, admin, tenant.t(tenant.lang, "adm_digest", body=Raw(body)))
+
+    # ---------------------------------------------------------------- майстрам
+    async def master_digest(self, slug: str) -> None:
+        """Зранку кожному підключеному майстру — його записи на сьогодні (якщо він сьогодні працює)."""
+        app = self.app
+        tenant, db = app.tenants[slug], app.db
+        if tenant.digest_at is None:
+            return
+        now = tenant.now()
+        today = now.date().isoformat()
+        if not in_window(now, tenant.digest_at, hours=3):
+            return
+        for master_id in app.master_links(tenant):
+            chat = app.master_chat(tenant, master_id)
+            key = f"master_digest:{master_id}"
+            if chat is None or db.kv_get(slug, key) == today:
+                continue
+            db.kv_set(slug, key, today)
+            rows = [r for r in app.bookings[slug].day_bookings(now.date(), include_noshow=False)
+                    if r["master_id"] == master_id]
+            master = tenant.masters[master_id]
+            if not rows and not tenant.master_intervals(master, now.date()):
+                continue  # вихідний і записів немає
+            body = app.master_day_text(tenant, master_id, now.date(), rows)
+            await app.send(tenant, chat, tenant.t(tenant.lang, "mst_digest", name=master.name, body=Raw(body)))
+
+    async def master_heads_up(self, slug: str) -> None:
+        """За master_heads_up_min хвилин до візиту — коротке нагадування майстру, хто зараз прийде."""
+        app = self.app
+        tenant, db = app.tenants[slug], app.db
+        minutes = tenant.master_heads_up_min
+        if not minutes:
+            return
+        links = app.master_links(tenant)
+        if not links:
+            return
+        now = tenant.now()
+        for b in db.bookings_between(slug, now, now + timedelta(minutes=minutes) + timedelta(seconds=1),
+                                     ("active",)):
+            if b["master_reminded"] or b["master_id"] not in links or parse_dt(b["start_at"]) <= now:
+                continue
+            db.set_booking_field(b["id"], "master_reminded", 1)
+            start = parse_dt(b["start_at"])
+            text = tenant.t(tenant.lang, "mst_heads_up", time=fmt_hhmm(start),
+                            min=max(1, int((start - now).total_seconds() // 60)),
+                            client=app.client_label(tenant, b), service=b["service_title"])
+            if b["note"]:
+                text += tenant.t(tenant.lang, "adm_note_line", note=b["note"])
+            # Нагадування особисте — надсилаємо і майстрові-адміністратору.
+            await app.send(tenant, links[b["master_id"]], text,
+                           inline_kb([[ibtn(tenant.t(tenant.lang, "btn_adm_open"), f"mK:{b['id']}")]]))
 
     # ---------------------------------------------------------------- вечірній підсумок
     async def evening_report(self, slug: str) -> None:

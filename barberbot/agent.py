@@ -367,26 +367,31 @@ class Agent:
         self.settings = settings
         self.llm = llm
 
-    def build_payload(self, tenant: Tenant, client, messages: list[dict], final_round: bool) -> dict:
+    def build_payload(self, tenant: Tenant, client, messages: list[dict], final_round: bool,
+                      master_brief: str | None = None) -> dict:
+        """master_brief — пише майстер: робочий режим без інструментів, у промпті його розклад."""
+        master = master_brief is not None
         payload = {
             "model": self.settings.model,
             "max_tokens": self.settings.max_tokens,
             "system": [
-                {"type": "text", "text": static_prompt(tenant), "cache_control": {"type": "ephemeral"}},
-                {"type": "text", "text": dynamic_prompt(tenant, client)},
+                {"type": "text", "text": static_prompt(tenant, master), "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": master_brief if master else dynamic_prompt(tenant, client)},
             ],
-            "tools": tool_definitions(tenant),
             "messages": merge_roles(messages),
         }
+        if not master:
+            payload["tools"] = tool_definitions(tenant)
         if self.settings.effort:
             payload["output_config"] = {"effort": self.settings.effort}
         if self.settings.thinking == "disabled":
             payload["thinking"] = {"type": "disabled"}
-        if final_round:
+        if final_round and not master:
             payload["tool_choice"] = {"type": "none"}
         return payload
 
-    async def reply(self, tenant: Tenant, booking: BookingService, db: DB, client, user_text: str) -> AgentResult:
+    async def reply(self, tenant: Tenant, booking: BookingService, db: DB, client, user_text: str,
+                    master_brief: str | None = None) -> AgentResult:
         now = tenant.now()
         history = prepare_history(db.load_history(client["id"], now - timedelta(hours=self.settings.history_hours),
                                                   self.settings.history_messages))
@@ -397,7 +402,8 @@ class Agent:
 
         for round_no in range(self.settings.max_tool_rounds + 1):
             payload = self.build_payload(tenant, client, history + turn,
-                                         final_round=round_no == self.settings.max_tool_rounds)
+                                         final_round=round_no == self.settings.max_tool_rounds,
+                                         master_brief=master_brief)
             try:
                 response = await self.llm.create(payload)
             except LLMError as e:

@@ -185,6 +185,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/export — вивантажити записи в Excel\n"
                       "/block — закрити час (вихідний, відпустка, запис по телефону)\n"
                       "/blocks — список закритого часу\n"
+                      "/masters — майстри в боті: запросити, відключити\n"
                       "/pause — вимкнути AI: усі повідомлення клієнтів ідуть вам\n"
                       "/resume — увімкнути AI назад\n"
                       "/reload — перечитати налаштування з файлу\n"
@@ -404,6 +405,76 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_resume": "Увімкнути AI",
         "cmd_reload": "Оновити налаштування",
         "cmd_myid": "Мій Telegram ID",
+        "cmd_masters": "Майстри в боті",
+        "cmd_my": "Мій день",
+        "cmd_myweek": "Мій тиждень",
+        "cmd_off": "Закрити час",
+        "cmd_offs": "Мій закритий час",
+        # Майстри: адмін
+        "adm_masters": "✂️ <b>Майстри в боті</b>\n\nПідключений майстер бачить свої записи, сам закриває час "
+                       "і отримує сповіщення про своїх клієнтів.\n{items}",
+        "adm_masters_on": "\n✅ <b>{name}</b> — {who}",
+        "adm_masters_off": "\n⚪️ <b>{name}</b> — не підключено",
+        "btn_adm_master_invite": "🔗 Запросити: {name}",
+        "btn_adm_master_unlink": "✖️ Відключити: {name}",
+        "btn_adm_yes_unlink": "✖️ Так, відключити",
+        "btn_adm_open": "📋 Відкрити запис",
+        "adm_master_invite": "🔗 Посилання для майстра <b>{name}</b>:\n\n{link}\n\nПерешліть його майстру — "
+                             "хай відкриє і натисне «Почати». Посилання одноразове, діє {hours} год.",
+        "adm_master_no_username": "Не вдалося отримати адресу бота. Спробуйте ще раз за хвилину.",
+        "adm_master_unlink_ask": "Відключити майстра <b>{name}</b> від бота? Він більше не бачитиме записи "
+                                 "й не отримуватиме сповіщень.",
+        "adm_master_unlinked": "✖️ Майстра {name} відключено від бота.",
+        "adm_master_joined": "✂️ Майстер <b>{name}</b> підключився до бота ({who}).",
+        "adm_master_noshow": "🚫 <b>Майстер {master} відмітив неявку</b>\n\n{booking}",
+        "adm_master_off": "🌴 Майстер <b>{master}</b> закрив час: {day} {range}",
+        "adm_master_off_conflicts": "\n\n⚠️ <b>На цей час уже є записи</b> — домовтеся з клієнтами "
+                                    "(перенести чи скасувати):{lines}",
+        "adm_master_on": "🔓 Майстер <b>{master}</b> відкрив час: {day} {range}",
+        # Майстри: сам майстер
+        "mst_invite_bad": "Це посилання недійсне або вже використане. Попросіть адміністратора надіслати нове.",
+        "mst_joined": "✅ <b>Вас підключено як майстра «{name}».</b>\n\n",
+        "mst_start": "✂️ <b>{name}</b>, ви майстер у боті «{shop}».\n\n"
+                     "📅 <b>Мій день</b> — ваші записи, гортайте дні ◀️ ▶️\n"
+                     "🗓 <b>Мій тиждень</b> — записи на 7 днів\n"
+                     "🌴 <b>Закрити час</b> — вихідний, перерва, особисті справи\n"
+                     "🔒 <b>Мій закритий час</b> — переглянути й відкрити назад\n\n"
+                     "Бот повідомить про нові записи, скасування й перенесення, зранку надішле розклад, "
+                     "а перед кожним клієнтом — нагадає.",
+        "mst_unlinked": "Вас відключено від бота як майстра. Записатися як клієнт можна в меню 👇",
+        "btn_mst_day": "📅 Мій день",
+        "btn_mst_week": "🗓 Мій тиждень",
+        "btn_mst_off": "🌴 Закрити час",
+        "btn_mst_offs": "🔒 Мій закритий час",
+        "btn_mst_to_day": "⬅️ До дня",
+        "mst_day_hint": "\n\nНатисніть запис, щоб відкрити картку 👇",
+        "mst_day_off": "\n\n🌴 За графіком у вас вихідний.",
+        "mst_day_blocks": "\n\n🔒 Закрито: {ranges}",
+        "mst_week_header": "🗓 <b>Ваші записи на 7 днів</b>",
+        "mst_off_day": "🌴 <b>Закрити час</b>\n\nОберіть день:",
+        "mst_off_range": "🌴 <b>{day}</b> · ваш графік {hours}\n\nЗакрити весь день чи з котрої години?",
+        "mst_off_whole_only": "🌴 <b>{day}</b> · {hours}\n\nЗакрити весь день?",
+        "mst_off_no_work": "за графіком вихідний",
+        "mst_off_end": "🌴 <b>{day}</b>, з {start}\n\nДо котрої години?",
+        "btn_mst_whole_day": "🌴 Весь день",
+        "btn_mst_off_yes": "✅ Закрити",
+        "mst_off_confirm": "Закрити <b>{day} {range}</b>?\nКлієнти не зможуть записатися на цей час.{conflicts}",
+        "mst_off_conflicts": "\n\n⚠️ На цей час уже є записи — адміністратор отримає сповіщення, "
+                             "щоб домовитися з клієнтами:{lines}",
+        "mst_off_done": "🔒 Закрито: <b>{day} {range}</b>. Клієнти не зможуть записатися на цей час.",
+        "mst_off_done_conflicts": "\n\n⚠️ Записи на цей час лишилися — адміністратора повідомлено:{lines}",
+        "mst_offs_header": "🔒 <b>Ваш закритий час</b>\nНатисніть, щоб відкрити назад:",
+        "mst_offs_header_none": "🔒 <b>Ваш закритий час</b>",
+        "mst_offs_admin": "\n\nЗакрив адміністратор (змінити може лише він):{lines}",
+        "mst_offs_empty": "🔒 Закритого часу немає. Щоб закрити — «🌴 Закрити час».",
+        "btn_mst_block_item": "🗑 {label}",
+        "alert_mst_opened": "Час знову відкрито для запису",
+        "mst_new": "🆕 <b>Новий запис до вас</b>\n\n📅 {day} о {time}\n💈 {service}\n👤 {client}",
+        "mst_cancelled": "❌ <b>Запис скасовано</b>\n\n📅 {day} о {time}\n💈 {service}\n👤 {client}",
+        "mst_moved": "🔁 <b>Запис перейшов до іншого майстра</b>\n\n📅 {day} о {time}\n💈 {service}\n👤 {client}",
+        "mst_rescheduled": "🔁 <b>Запис перенесено</b>\n\n💈 {service}\n👤 {client}\nБуло: {old}\nСтало: <b>{new}</b>",
+        "mst_digest": "☀️ <b>Доброго ранку, {name}!</b>\n\n{body}",
+        "mst_heads_up": "⏰ <b>О {time}</b> (через {min} хв) — {client}\n💈 {service}",
     },
     # ------------------------------------------------------------------ RU
     "ru": {
@@ -552,6 +623,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/export — выгрузить записи в Excel\n"
                       "/block — закрыть время (выходной, отпуск, запись по телефону)\n"
                       "/blocks — список закрытого времени\n"
+                      "/masters — мастера в боте: пригласить, отключить\n"
                       "/pause — выключить AI: все сообщения клиентов идут вам\n"
                       "/resume — включить AI обратно\n"
                       "/reload — перечитать настройки из файла\n"
@@ -770,6 +842,76 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_resume": "Включить AI",
         "cmd_reload": "Обновить настройки",
         "cmd_myid": "Мой Telegram ID",
+        "cmd_masters": "Мастера в боте",
+        "cmd_my": "Мой день",
+        "cmd_myweek": "Моя неделя",
+        "cmd_off": "Закрыть время",
+        "cmd_offs": "Моё закрытое время",
+        # Мастера: админ
+        "adm_masters": "✂️ <b>Мастера в боте</b>\n\nПодключённый мастер видит свои записи, сам закрывает время "
+                       "и получает уведомления о своих клиентах.\n{items}",
+        "adm_masters_on": "\n✅ <b>{name}</b> — {who}",
+        "adm_masters_off": "\n⚪️ <b>{name}</b> — не подключён",
+        "btn_adm_master_invite": "🔗 Пригласить: {name}",
+        "btn_adm_master_unlink": "✖️ Отключить: {name}",
+        "btn_adm_yes_unlink": "✖️ Да, отключить",
+        "btn_adm_open": "📋 Открыть запись",
+        "adm_master_invite": "🔗 Ссылка для мастера <b>{name}</b>:\n\n{link}\n\nПерешлите её мастеру — "
+                             "пусть откроет и нажмёт «Старт». Ссылка одноразовая, действует {hours} ч.",
+        "adm_master_no_username": "Не удалось получить адрес бота. Попробуйте ещё раз через минуту.",
+        "adm_master_unlink_ask": "Отключить мастера <b>{name}</b> от бота? Он больше не будет видеть записи "
+                                 "и получать уведомления.",
+        "adm_master_unlinked": "✖️ Мастер {name} отключён от бота.",
+        "adm_master_joined": "✂️ Мастер <b>{name}</b> подключился к боту ({who}).",
+        "adm_master_noshow": "🚫 <b>Мастер {master} отметил неявку</b>\n\n{booking}",
+        "adm_master_off": "🌴 Мастер <b>{master}</b> закрыл время: {day} {range}",
+        "adm_master_off_conflicts": "\n\n⚠️ <b>На это время уже есть записи</b> — договоритесь с клиентами "
+                                    "(перенести или отменить):{lines}",
+        "adm_master_on": "🔓 Мастер <b>{master}</b> открыл время: {day} {range}",
+        # Мастера: сам мастер
+        "mst_invite_bad": "Эта ссылка недействительна или уже использована. Попросите администратора прислать новую.",
+        "mst_joined": "✅ <b>Вы подключены как мастер «{name}».</b>\n\n",
+        "mst_start": "✂️ <b>{name}</b>, вы мастер в боте «{shop}».\n\n"
+                     "📅 <b>Мой день</b> — ваши записи, листайте дни ◀️ ▶️\n"
+                     "🗓 <b>Моя неделя</b> — записи на 7 дней\n"
+                     "🌴 <b>Закрыть время</b> — выходной, перерыв, личные дела\n"
+                     "🔒 <b>Моё закрытое время</b> — посмотреть и открыть обратно\n\n"
+                     "Бот сообщит о новых записях, отменах и переносах, утром пришлёт расписание, "
+                     "а перед каждым клиентом — напомнит.",
+        "mst_unlinked": "Вы отключены от бота как мастер. Записаться как клиент можно в меню 👇",
+        "btn_mst_day": "📅 Мой день",
+        "btn_mst_week": "🗓 Моя неделя",
+        "btn_mst_off": "🌴 Закрыть время",
+        "btn_mst_offs": "🔒 Моё закрытое время",
+        "btn_mst_to_day": "⬅️ К дню",
+        "mst_day_hint": "\n\nНажмите запись, чтобы открыть карточку 👇",
+        "mst_day_off": "\n\n🌴 По графику у вас выходной.",
+        "mst_day_blocks": "\n\n🔒 Закрыто: {ranges}",
+        "mst_week_header": "🗓 <b>Ваши записи на 7 дней</b>",
+        "mst_off_day": "🌴 <b>Закрыть время</b>\n\nВыберите день:",
+        "mst_off_range": "🌴 <b>{day}</b> · ваш график {hours}\n\nЗакрыть весь день или с какого часа?",
+        "mst_off_whole_only": "🌴 <b>{day}</b> · {hours}\n\nЗакрыть весь день?",
+        "mst_off_no_work": "по графику выходной",
+        "mst_off_end": "🌴 <b>{day}</b>, с {start}\n\nДо какого часа?",
+        "btn_mst_whole_day": "🌴 Весь день",
+        "btn_mst_off_yes": "✅ Закрыть",
+        "mst_off_confirm": "Закрыть <b>{day} {range}</b>?\nКлиенты не смогут записаться на это время.{conflicts}",
+        "mst_off_conflicts": "\n\n⚠️ На это время уже есть записи — администратор получит уведомление, "
+                             "чтобы договориться с клиентами:{lines}",
+        "mst_off_done": "🔒 Закрыто: <b>{day} {range}</b>. Клиенты не смогут записаться на это время.",
+        "mst_off_done_conflicts": "\n\n⚠️ Записи на это время остались — администратор уведомлён:{lines}",
+        "mst_offs_header": "🔒 <b>Ваше закрытое время</b>\nНажмите, чтобы открыть обратно:",
+        "mst_offs_header_none": "🔒 <b>Ваше закрытое время</b>",
+        "mst_offs_admin": "\n\nЗакрыл администратор (изменить может только он):{lines}",
+        "mst_offs_empty": "🔒 Закрытого времени нет. Чтобы закрыть — «🌴 Закрыть время».",
+        "btn_mst_block_item": "🗑 {label}",
+        "alert_mst_opened": "Время снова открыто для записи",
+        "mst_new": "🆕 <b>Новая запись к вам</b>\n\n📅 {day} в {time}\n💈 {service}\n👤 {client}",
+        "mst_cancelled": "❌ <b>Запись отменена</b>\n\n📅 {day} в {time}\n💈 {service}\n👤 {client}",
+        "mst_moved": "🔁 <b>Запись перешла к другому мастеру</b>\n\n📅 {day} в {time}\n💈 {service}\n👤 {client}",
+        "mst_rescheduled": "🔁 <b>Запись перенесена</b>\n\n💈 {service}\n👤 {client}\nБыло: {old}\nСтало: <b>{new}</b>",
+        "mst_digest": "☀️ <b>Доброе утро, {name}!</b>\n\n{body}",
+        "mst_heads_up": "⏰ <b>В {time}</b> (через {min} мин) — {client}\n💈 {service}",
     },
     # ------------------------------------------------------------------ EN
     "en": {
@@ -918,6 +1060,7 @@ TEXTS: dict[str, dict[str, str]] = {
                       "/export — export bookings to Excel\n"
                       "/block — block time (day off, vacation, phone booking)\n"
                       "/blocks — list of blocked time\n"
+                      "/masters — masters in the bot: invite, disconnect\n"
                       "/pause — turn AI off: all client messages go to you\n"
                       "/resume — turn AI back on\n"
                       "/reload — reload settings from the file\n"
@@ -1135,6 +1278,76 @@ TEXTS: dict[str, dict[str, str]] = {
         "cmd_resume": "Turn AI on",
         "cmd_reload": "Reload settings",
         "cmd_myid": "My Telegram ID",
+        "cmd_masters": "Masters in the bot",
+        "cmd_my": "My day",
+        "cmd_myweek": "My week",
+        "cmd_off": "Block time",
+        "cmd_offs": "My blocked time",
+        # Masters: admin
+        "adm_masters": "✂️ <b>Masters in the bot</b>\n\nA connected master sees their bookings, blocks their own "
+                       "time and gets notified about their clients.\n{items}",
+        "adm_masters_on": "\n✅ <b>{name}</b> — {who}",
+        "adm_masters_off": "\n⚪️ <b>{name}</b> — not connected",
+        "btn_adm_master_invite": "🔗 Invite: {name}",
+        "btn_adm_master_unlink": "✖️ Disconnect: {name}",
+        "btn_adm_yes_unlink": "✖️ Yes, disconnect",
+        "btn_adm_open": "📋 Open booking",
+        "adm_master_invite": "🔗 Link for master <b>{name}</b>:\n\n{link}\n\nForward it to the master — they "
+                             "open it and tap “Start”. One-time link, valid for {hours} h.",
+        "adm_master_no_username": "Couldn't get the bot address. Please try again in a minute.",
+        "adm_master_unlink_ask": "Disconnect master <b>{name}</b> from the bot? They will no longer see bookings "
+                                 "or get notifications.",
+        "adm_master_unlinked": "✖️ Master {name} disconnected from the bot.",
+        "adm_master_joined": "✂️ Master <b>{name}</b> connected to the bot ({who}).",
+        "adm_master_noshow": "🚫 <b>Master {master} marked a no-show</b>\n\n{booking}",
+        "adm_master_off": "🌴 Master <b>{master}</b> blocked time: {day} {range}",
+        "adm_master_off_conflicts": "\n\n⚠️ <b>There are bookings at this time</b> — please arrange with "
+                                    "the clients (reschedule or cancel):{lines}",
+        "adm_master_on": "🔓 Master <b>{master}</b> unblocked time: {day} {range}",
+        # Masters: the master
+        "mst_invite_bad": "This link is invalid or already used. Ask the administrator for a new one.",
+        "mst_joined": "✅ <b>You are connected as master “{name}”.</b>\n\n",
+        "mst_start": "✂️ <b>{name}</b>, you are a master in the “{shop}” bot.\n\n"
+                     "📅 <b>My day</b> — your bookings, browse days ◀️ ▶️\n"
+                     "🗓 <b>My week</b> — bookings for 7 days\n"
+                     "🌴 <b>Block time</b> — day off, break, personal matters\n"
+                     "🔒 <b>My blocked time</b> — view and unblock\n\n"
+                     "The bot will tell you about new bookings, cancellations and reschedules, send your schedule "
+                     "in the morning and remind you before each client.",
+        "mst_unlinked": "You have been disconnected from the bot as a master. You can still book as a client 👇",
+        "btn_mst_day": "📅 My day",
+        "btn_mst_week": "🗓 My week",
+        "btn_mst_off": "🌴 Block time",
+        "btn_mst_offs": "🔒 My blocked time",
+        "btn_mst_to_day": "⬅️ To the day",
+        "mst_day_hint": "\n\nTap a booking to open its card 👇",
+        "mst_day_off": "\n\n🌴 Day off according to your schedule.",
+        "mst_day_blocks": "\n\n🔒 Blocked: {ranges}",
+        "mst_week_header": "🗓 <b>Your bookings for 7 days</b>",
+        "mst_off_day": "🌴 <b>Block time</b>\n\nChoose a day:",
+        "mst_off_range": "🌴 <b>{day}</b> · your hours {hours}\n\nBlock the whole day or from what time?",
+        "mst_off_whole_only": "🌴 <b>{day}</b> · {hours}\n\nBlock the whole day?",
+        "mst_off_no_work": "day off by schedule",
+        "mst_off_end": "🌴 <b>{day}</b>, from {start}\n\nUntil what time?",
+        "btn_mst_whole_day": "🌴 Whole day",
+        "btn_mst_off_yes": "✅ Block",
+        "mst_off_confirm": "Block <b>{day} {range}</b>?\nClients won't be able to book this time.{conflicts}",
+        "mst_off_conflicts": "\n\n⚠️ There are bookings at this time — the administrator will be notified "
+                             "to arrange with the clients:{lines}",
+        "mst_off_done": "🔒 Blocked: <b>{day} {range}</b>. Clients won't be able to book this time.",
+        "mst_off_done_conflicts": "\n\n⚠️ Bookings at this time remain — the administrator has been notified:{lines}",
+        "mst_offs_header": "🔒 <b>Your blocked time</b>\nTap to unblock:",
+        "mst_offs_header_none": "🔒 <b>Your blocked time</b>",
+        "mst_offs_admin": "\n\nBlocked by the administrator (only they can change it):{lines}",
+        "mst_offs_empty": "🔒 No blocked time. To block — “🌴 Block time”.",
+        "btn_mst_block_item": "🗑 {label}",
+        "alert_mst_opened": "Time is open for booking again",
+        "mst_new": "🆕 <b>New booking with you</b>\n\n📅 {day} at {time}\n💈 {service}\n👤 {client}",
+        "mst_cancelled": "❌ <b>Booking cancelled</b>\n\n📅 {day} at {time}\n💈 {service}\n👤 {client}",
+        "mst_moved": "🔁 <b>Booking moved to another master</b>\n\n📅 {day} at {time}\n💈 {service}\n👤 {client}",
+        "mst_rescheduled": "🔁 <b>Booking rescheduled</b>\n\n💈 {service}\n👤 {client}\nWas: {old}\nNow: <b>{new}</b>",
+        "mst_digest": "☀️ <b>Good morning, {name}!</b>\n\n{body}",
+        "mst_heads_up": "⏰ <b>At {time}</b> (in {min} min) — {client}\n💈 {service}",
     },
 }
 

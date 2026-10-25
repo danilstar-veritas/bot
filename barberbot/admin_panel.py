@@ -186,6 +186,7 @@ class AdminPanel:
         await ctx.show(message_id, ctx.at("adm_resched_done", summary=Raw(self._booking_summary(tenant, new, client)),
                                           old=old_text, who=Raw(ctx.at("adm_resched_offline" if offline
                                                                        else "adm_resched_notified"))))
+        await self.notify_master_resched(tenant, old, new)
         if client and not offline and not client["blocked"]:
             lang = client["lang"] or tenant.lang
             await self.send(tenant, client["tg_id"], tenant.t(

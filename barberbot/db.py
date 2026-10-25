@@ -150,6 +150,11 @@ class DB:
             self.conn.execute("ALTER TABLE bookings ADD COLUMN cleared INTEGER NOT NULL DEFAULT 0")
         if "prepay" not in columns:  # передоплата: '' — не потрібна, waiting / claimed (клієнт каже, що сплатив) / paid
             self.conn.execute("ALTER TABLE bookings ADD COLUMN prepay TEXT NOT NULL DEFAULT ''")
+        if "master_reminded" not in columns:  # майстру вже нагадали, що скоро прийде цей клієнт
+            self.conn.execute("ALTER TABLE bookings ADD COLUMN master_reminded INTEGER NOT NULL DEFAULT 0")
+        block_columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(blocks)")}
+        if "created_by" not in block_columns:  # хто закрив час: NULL — адміністратор, 'master' — сам майстер
+            self.conn.execute("ALTER TABLE blocks ADD COLUMN created_by TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -361,12 +366,12 @@ class DB:
                             end: datetime, now: datetime) -> None:
         self.conn.execute(
             """UPDATE bookings SET master_id = ?, master_name = ?, start_at = ?, end_at = ?, updated_at = ?,
-                   reminders_sent = '', client_confirmed = 0 WHERE id = ?""",
+                   reminders_sent = '', client_confirmed = 0, master_reminded = 0 WHERE id = ?""",
             (master_id, master_name, dt_str(start), dt_str(end), dt_str(now), booking_id),
         )
 
     def set_booking_field(self, booking_id: int, field: str, value) -> None:
-        if field not in {"reminders_sent", "client_confirmed", "nudged", "note", "prepay"}:
+        if field not in {"reminders_sent", "client_confirmed", "nudged", "note", "prepay", "master_reminded"}:
             raise ValueError(field)
         self.conn.execute(f"UPDATE bookings SET {field} = ? WHERE id = ?", (value, booking_id))
 
@@ -395,11 +400,15 @@ class DB:
 
     # ---------------------------------------------------------- blocks
     def add_block(self, tenant: str, master_id: str | None, start: datetime, end: datetime,
-                  note: str, now: datetime) -> int:
+                  note: str, now: datetime, created_by: str | None = None) -> int:
         return self.x(
-            "INSERT INTO blocks (tenant, master_id, start_at, end_at, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            tenant, master_id, dt_str(start), dt_str(end), note, dt_str(now),
+            "INSERT INTO blocks (tenant, master_id, start_at, end_at, note, created_at, created_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            tenant, master_id, dt_str(start), dt_str(end), note, dt_str(now), created_by,
         )
+
+    def get_block(self, tenant: str, block_id: int) -> sqlite3.Row | None:
+        return self.one("SELECT * FROM blocks WHERE tenant = ? AND id = ?", tenant, block_id)
 
     def blocks_overlapping(self, tenant: str, start: datetime, end: datetime,
                            master_id: str | None) -> list[sqlite3.Row]:
@@ -483,6 +492,12 @@ class DB:
 
     def kv_set(self, tenant: str, key: str, value: str | None) -> None:
         self.conn.execute("INSERT OR REPLACE INTO kv (tenant, key, value) VALUES (?, ?, ?)", (tenant, key, value))
+
+    def kv_prefix(self, tenant: str, prefix: str) -> dict[str, str]:
+        """Усі ключі, що починаються з prefix: {ключ: значення}."""
+        rows = self.q("SELECT key, value FROM kv WHERE tenant = ? AND substr(key, 1, ?) = ?",
+                      tenant, len(prefix), prefix)
+        return {r["key"]: r["value"] for r in rows}
 
     def kv_delete(self, tenant: str, key: str) -> None:
         self.conn.execute("DELETE FROM kv WHERE tenant = ? AND key = ?", (tenant, key))

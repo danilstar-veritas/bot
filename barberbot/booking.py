@@ -276,8 +276,8 @@ class BookingService:
         return self.db.get_booking(booking_id)
 
     def add_block(self, master_id: str | None, start: datetime, end: datetime,
-                  note: str) -> tuple[int, list[sqlite3.Row]]:
+                  note: str, created_by: str | None = None) -> tuple[int, list[sqlite3.Row]]:
         now = self.tenant.now()
-        block_id = self.db.add_block(self.slug, master_id, start, end, note, now)
+        block_id = self.db.add_block(self.slug, master_id, start, end, note, now, created_by)
         conflicts = self.db.active_bookings_overlapping(self.slug, start, end, master_id)
         return block_id, conflicts
