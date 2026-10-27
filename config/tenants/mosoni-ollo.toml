@@ -1,0 +1,295 @@
+# ─────────────────────────────────────────────────────────────────────
+#  Угорська версія закладу: «Mosoni Olló Stúdió», Мошонмадяровар.
+#  Усе (меню, послуги, майстри, ціни) — угорською. Правила формату — як у demo-barbershop.toml.
+#  Щоб запустити: вставте токен нового бота від @BotFather і свій Telegram ID в admins.
+# ─────────────────────────────────────────────────────────────────────
+
+enabled = true
+
+name = "Mosoni Olló Stúdió"
+
+bot_token = "ВСТАВТЕ_ТОКЕН_ВІД_BOTFATHER"
+
+admins = []
+tech_admins = []
+
+timezone = "Europe/Budapest"
+
+# Лише угорська: клієнти й повідомлення власнику — угорською.
+languages = ["hu"]
+
+price_format = "{price} Ft"
+
+
+[info]
+address = "9200 Mosonmagyaróvár, Fő utca 12."
+phone = "+36 30 000 00 00"
+maps_url = "https://maps.google.com/?q=Fő+utca+12+Mosonmagyaróvár"
+directions = "A bejárat az udvar felől van, mellette ingyenes parkoló található."
+payment = "Készpénz, bankkártya, Apple Pay / Google Pay."
+hours = ""
+extra = """
+Amíg vár: kávé, tea és PlayStation ingyen.
+A 12 év alatti gyerekeket csak szülői jelenlétében vágjuk.
+Ajándékutalványt a szalonban lehet vásárolni (értéke 5000 Ft-tól).
+A hajmosás nem tartozik a hajvágás árába: 1500 Ft (foglaláskor hozzáadható). A beszárítás a hajvágás árában benne van.
+"""
+admin_title = ""
+
+
+[booking]
+slot_step_min = 30
+days_ahead = 14
+min_lead_min = 60
+buffer_min = 0
+require_phone = true
+max_active_per_client = 0
+max_per_week_per_client = 5
+cancel_min_hours = 2
+holidays = ["2026-12-24", "2026-12-25", "2026-12-26", "2027-01-01"]
+
+
+[reminders]
+hours_before = [24, 2]
+
+
+[repeat_visit]
+enabled = true
+after_days = 28
+send_at = "11:00"
+
+
+[notifications]
+new_bookings = true
+digest_at = "08:00"
+report_at = "20:00"
+master_heads_up_min = 15
+
+
+[prepayment]
+# Előleg: kikapcsolva, amíg nincs megadva kártyaszám (card).
+enabled = true
+amount = 1500
+card = ""
+recipient = ""
+pay_within_hours = 2
+
+
+[ai]
+enabled = true
+address_form = "ви"          # ввічлива форма («Ön»)
+handoff_pause_hours = 12
+max_messages_per_hour = 20
+max_messages_per_day = 60
+extra_instructions = """
+Ügyfelekkel magyarul beszélj, udvariasan, magázódva («Ön»), hacsak az ügyfél nem ír más nyelven.
+"""
+
+
+[schedule]
+mon = "09:00-19:00"
+tue = "09:00-19:00"
+wed = "09:00-19:00"
+thu = "09:00-19:00"
+fri = "09:00-19:00"
+sat = "09:00-14:00"
+sun = "off"
+
+
+# ── Szolgáltatások ───────────────────────────────────────────────────
+
+# ── 👨 Férfi
+[[services]]
+id = "haircut"
+title = "Férfi hajvágás"
+short = "Klasszikus hajvágás"
+icon = "✂️"
+duration = 60
+price = 5500
+group = "👨 Férfi"
+
+[[services]]
+id = "beard"
+title = "Szakállformázás"
+icon = "🧔"
+duration = 30
+price = 3500
+group = "👨 Férfi"
+
+[[services]]
+id = "combo"
+title = "Hajvágás + szakáll"
+icon = "💈"
+duration = 90
+price = 8500
+description = "A legnépszerűbb: hajvágás, szakállformázás és meleg törölköző."
+group = "👨 Férfi"
+
+[[services]]
+id = "buzz"
+title = "Gépi hajvágás"
+icon = "🪒"
+duration = 30
+price = 3500
+group = "👨 Férfi"
+
+# ── 👩 Női
+[[services]]
+id = "women_short"
+title = "Női hajvágás (rövid haj)"
+short = "Rövid haj"
+icon = "💇‍♀️"
+duration = 60
+price = 7000
+description = "Államig érő haj. A beszárítás az árban benne van."
+group = "👩 Női"
+
+[[services]]
+id = "women_medium"
+title = "Női hajvágás (félhosszú haj)"
+short = "Félhosszú haj"
+icon = "💁‍♀️"
+duration = 90
+price = 8500
+description = "Vállig érő haj. A beszárítás az árban benne van."
+group = "👩 Női"
+
+[[services]]
+id = "women_long"
+title = "Női hajvágás (hosszú haj)"
+short = "Hosszú haj"
+icon = "👸"
+duration = 90
+price = 9500
+description = "Vállon túl érő haj. A beszárítás az árban benne van."
+group = "👩 Női"
+
+[[services]]
+id = "pixie"
+title = "Női pixie / undercut vágás"
+short = "Pixie / undercut"
+icon = "⚡"
+duration = 60
+price = 7500
+description = "Rövid, formás vágás, igény szerint gépi kivágással."
+group = "👩 Női"
+
+[[services]]
+id = "trim_ends"
+title = "Hajvégek igazítása"
+icon = "✨"
+duration = 30
+price = 4000
+description = "A forma frissítése a hossz megváltoztatása nélkül."
+group = "👩 Női"
+
+[[services]]
+id = "bangs"
+title = "Frufru vágása"
+icon = "🎀"
+duration = 30
+price = 2000
+group = "👩 Női"
+
+# ── 👦 Fiúk
+[[services]]
+id = "kids_boy"
+title = "Kis úriember"
+icon = "👦"
+duration = 45
+price = 4000
+description = "Klasszikus, ollós hajvágás."
+group = "👦 Fiúk (8 éves korig)"
+
+[[services]]
+id = "kids_buzz"
+title = "Kópé gépi vágással"
+icon = "🪒"
+duration = 30
+price = 2500
+description = "Gyorsan és szépen, géppel."
+group = "👦 Fiúk (8 éves korig)"
+
+# ── 👧 Lányok (csak fodrásznők)
+[[services]]
+id = "kids_girl"
+title = "Kis hercegnő"
+icon = "👧"
+duration = 45
+price = 4500
+description = "Rövid vagy félhosszú hajra."
+group = "👧 Lányok (8 éves korig)"
+
+[[services]]
+id = "kids_girl_long"
+title = "Hosszú hajú hercegnő"
+icon = "👑"
+duration = 60
+price = 5500
+description = "Hosszú hajra."
+group = "👧 Lányok (8 éves korig)"
+
+[[services]]
+id = "kids_ends"
+title = "Hajvégek a hercegnőnek"
+icon = "🌟"
+duration = 30
+price = 2500
+description = "A forma frissítése a hossz megváltoztatása nélkül."
+group = "👧 Lányok (8 éves korig)"
+
+[[services]]
+id = "kids_bangs"
+title = "Frufru a hercegnőnek"
+icon = "🦋"
+duration = 30
+price = 1500
+description = "Szép, egyenes frufru."
+group = "👧 Lányok (8 éves korig)"
+
+# ── Kiegészítő (csak a foglalási kártyán a «➕» gombbal)
+[[services]]
+id = "wash"
+title = "Hajmosás"
+icon = "🚿"
+duration = 15
+price = 1500
+addon_only = true
+addon_for = ["haircut", "combo", "buzz", "women_short", "women_medium", "women_long", "pixie", "bangs",
+             "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_bangs"]
+
+
+# ── Fodrászok ────────────────────────────────────────────────────────
+
+[[masters]]
+id = "bence"
+name = "Bence"
+services = ["haircut", "beard", "combo", "kids_boy", "kids_buzz", "buzz", "wash"]
+about = "Egyszer a Mosoni-Dunánál, csónakban ülve nyírta ki magát úgy, hogy egyetlen felesleges hajszálat sem vágott le. Azóta minden fade számára meditáció, a tökéletes átmenet pedig becsületbeli ügy. A kávé nála csak fekete, a zene csak bakelitről szól."
+
+[[masters]]
+id = "mate"
+name = "Máté"
+services = ["haircut", "beard", "combo", "kids_boy", "kids_buzz", "buzz", "wash"]
+about = "A szakállat külön művészeti ágnak tartja. Mondják, egyszer olyan egyenesre igazította egy vendég szakállát, hogy az rögtön elment útlevélképet csináltatni. Hétfőn nem dolgozik: ollót élez, és Krúdyt olvas újra."
+  [masters.schedule]
+  mon = "off"
+  sun = "11:00-17:00"
+
+
+[[masters]]
+id = "reka"
+name = "Réka"
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_ends", "kids_bangs", "haircut", "buzz", "wash"]
+about = "Szobrásznak készült, de rájött, hogy a haj engedelmesebb a márványnál. Öt perc beszélgetés után tudja, melyik frizura tesz Önt boldogabbá — és eddig egyszer sem tévedett."
+
+[[masters]]
+id = "zsofi"
+name = "Zsófi"
+services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_ends", "kids_bangs", "haircut", "buzz", "wash"]
+about = "A kis hercegnők és úriemberek főmágusa: a székében a gyerekek elfelejtik, hogy féltek a hajvágástól. A zsebében mindig van egy jutalommatrica, a tarsolyában pedig egy pontosan harminc perces mese."
+
+
+# ── Egyedi szövegek ──────────────────────────────────────────────────
+[texts.hu]
+my_footer = "\n\n☕ Már várjuk Önt! A kávét vagy teát mi álljuk, amíg pedig vár, játszhat egy parti PlayStationt 🎮\nA fodrásza már élezi az ollót ✂️😉\n\nHa változnak a tervei, helyezze át vagy mondja le a foglalást az alábbi gombokkal 👇"

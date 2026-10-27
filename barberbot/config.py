@@ -83,9 +83,9 @@ def parse_day_spec(spec, where: str) -> list[tuple[time, time]]:
 def parse_user_date(value: str, today: date) -> date | None:
     """Дата від людини: 2026-10-30, 30.10.2026, 30.10, 30/10, сьогодні, завтра."""
     s = str(value).strip().lower()
-    if s in ("today", "сьогодні", "сегодня"):
+    if s in ("today", "сьогодні", "сегодня", "ma"):
         return today
-    if s in ("tomorrow", "завтра"):
+    if s in ("tomorrow", "завтра", "holnap"):
         return today + timedelta(days=1)
     m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
     try:

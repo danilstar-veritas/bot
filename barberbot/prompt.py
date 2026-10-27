@@ -11,7 +11,7 @@ from datetime import timedelta
 from .config import Tenant, fmt_hhmm
 from .texts import WEEKDAYS_FULL_UK, WEEKDAYS_SHORT
 
-LANG_NAMES_UK = {"uk": "українською", "ru": "російською", "en": "англійською"}
+LANG_NAMES_UK = {"uk": "українською", "ru": "російською", "en": "англійською", "hu": "угорською"}
 
 RULES = """Ти — віртуальний адміністратор закладу «{name}» у Telegram. Ти допомагаєш клієнтам: відповідаєш на питання, записуєш на послуги, переносиш і скасовуєш записи.
 

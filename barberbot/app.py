@@ -1753,7 +1753,7 @@ class BotApp(AdminPanel, MasterPanel):
             await ctx.send(usage)
             return
         who = parts[0].lower()
-        if who in ("all", "*", "всі", "все"):
+        if who in ("all", "*", "всі", "все", "mind"):
             master_id = None
         elif who in tenant.masters:
             master_id = who

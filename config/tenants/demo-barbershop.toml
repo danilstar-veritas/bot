@@ -28,9 +28,9 @@ tech_admins = []
 # Часовий пояс закладу: Europe/Kyiv, Europe/Budapest, Europe/Warsaw, Europe/Berlin…
 timezone = "Europe/Kyiv"
 
-# Мови кнопок і меню: uk, ru, en. Перша — основна (нею пишуться повідомлення власнику).
+# Мови кнопок і меню: uk, ru, en, hu. Перша — основна (нею пишуться повідомлення власнику).
 # Клієнт бачить кнопки мовою свого Telegram, якщо вона є в списку. AI відповідає мовою клієнта.
-languages = ["uk", "ru", "en"]
+languages = ["uk", "ru", "en", "hu"]
 
 # Як показувати ціну: "{price} грн", "{price} Ft", "€{price}", "{price} zł"
 price_format = "{price} грн"

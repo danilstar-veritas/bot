@@ -1,4 +1,4 @@
-"""Усі тексти бота трьома мовами (uk, ru, en).
+"""Усі тексти бота чотирма мовами (uk, ru, en, hu).
 
 Будь-який текст можна перевизначити для конкретного закладу в його файлі
 налаштувань, у розділі [texts.uk] / [texts.ru] / [texts.en].
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from html import escape
 
-SUPPORTED_LANGS = ("uk", "ru", "en")
+SUPPORTED_LANGS = ("uk", "ru", "en", "hu")
 PLAIN_PREFIXES = ("btn_", "cmd_", "alert_")
 
 
@@ -24,6 +24,7 @@ WEEKDAYS_SHORT = {
     "uk": ["пн", "вт", "ср", "чт", "пт", "сб", "нд"],
     "ru": ["пн", "вт", "ср", "чт", "пт", "сб", "вс"],
     "en": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    "hu": ["H", "K", "Sze", "Cs", "P", "Szo", "V"],
 }
 
 # Повні назви днів для системного промпту (промпт написаний українською).
@@ -1384,6 +1385,462 @@ TEXTS: dict[str, dict[str, str]] = {
         "mst_rescheduled": "🔁 <b>Booking rescheduled</b>\n\n💈 {service}\n👤 {client}\nWas: {old}\nNow: <b>{new}</b>",
         "mst_digest": "☀️ <b>Good morning, {name}!</b>\n\n{body}",
         "mst_heads_up": "⏰ <b>At {time}</b> (in {min} min) — {client}\n💈 {service}",
+    },
+
+    # ------------------------------------------------------------------ HU
+    "hu": {
+        # Vendég menü
+        "btn_book": "📅 Időpontfoglalás",
+        "btn_my": "🗓 Foglalásaim",
+        "btn_prices": "💈 Szolgáltatások és árak",
+        "btn_contacts": "📍 Elérhetőségek",
+        "start": "Üdvözlöm! 👋 A(z) <b>{name}</b> foglalási asszisztense vagyok.\n\n"
+                 "Segítek időpontot foglalni, áthelyezni vagy lemondani, és válaszolok a kérdéseire.\n\n"
+                 "Válasszon a menüből 👇 vagy egyszerűen írja le, mi érdekli.",
+        "start_no_ai": "Üdvözlöm! 👋 A(z) <b>{name}</b> foglalási asszisztense vagyok.\n\n"
+                       "Segítek időpontot foglalni, áthelyezni vagy lemondani.\nVálasszon a menüből 👇",
+        "start_admin_hint": "\n\n🛠 Ön a bot adminisztrátora. Vezérlőpult: /admin",
+        # Foglalás gombokkal
+        "choose_service": "Válasszon szolgáltatást:",
+        "choose_group": "✨ Válasszon kategóriát — utána kiválasztjuk a fodrászt és Önnek megfelelő időpontot 👇",
+        "choose_service_in_group": "<b>{group}</b>\nVálasszon szolgáltatást — utána kiválasztjuk a fodrászt és Önnek megfelelő időpontot 👇",
+        "btn_service": "{title} · {price}",
+        "choose_master": "💈 <b>{service}</b>\n💰 {price} · ⏱ {duration} perc{description}\n\nVálasszon fodrászt 👇",
+        "master_service_desc": "\n<i>{description}</i>",
+        "btn_any_master": "👥 Bármelyik fodrász",
+        "any_master": "bármelyik fodrász",
+        "choose_day": "💈 <b>{service}</b> · {master}\n\nVálasszon napot:",
+        "no_days": "💈 <b>{service}</b> · {master}\n\nSajnos a következő {days} napban nincs szabad időpont 😕\n"
+                   "Írjon nekünk, és megpróbálunk megoldást találni.",
+        "choose_time": "💈 <b>{service}</b> · {master}\n📅 {day}\n\nVálasszon időpontot:",
+        "no_times": "📅 {day}: már nincs szabad időpont. Kérjük, válasszon másik napot:",
+        "btn_back": "⬅️ Vissza",
+        "day_today": "Ma",
+        "day_tomorrow": "Holnap",
+        "card": "📝 <b>Kérjük, ellenőrizze:</b>\n\n💈 {service}\n👤 Fodrász: {master}\n"
+                "📅 {day}, {time}\n⏱ {duration} perc · 💰 {price}",
+        "btn_confirm": "✅ Megerősítés",
+        "btn_add_addon": "➕ {title} (+{duration} perc, +{price})",
+        "btn_other_time": "⬅️ Másik időpont",
+        "btn_no_change": "✖️ Nem, módosítom",
+        "ask_phone": "Már csak a telefonszáma hiányzik, hogy a fodrász kapcsolatba tudjon lépni Önnel.\n\n"
+                     "Nyomja meg lent a <b>«📱 Telefonszám megosztása»</b> gombot, vagy írja be a számot üzenetben.",
+        "btn_share_phone": "📱 Telefonszám megosztása",
+        "btn_cancel": "Mégse",
+        "bad_phone": "Ez nem tűnik telefonszámnak 🤔\nNyomja meg a «📱 Telefonszám megosztása» gombot, "
+                     "vagy írja be a számot országhívóval, pl. +36301234567.",
+        "phone_saved": "Köszönjük, a számot elmentettük 👍",
+        "booking_aborted": "Rendben, a foglalás nem jött létre. Ha meggondolja magát — «📅 Időpontfoglalás».",
+        "booked": "✅ <b>Kész, a foglalása rögzítve!</b>\n\n💈 {service}\n👤 {master}\n📅 {day}, {time}\n💰 {price}{address}\n\n"
+                  "Előre emlékeztetni fogjuk. Áthelyezés vagy lemondás — a «🗓 Foglalásaim» menüpontban.",
+        "booked_address": "\n📍 {address}",
+        "prepay_block": "\n\n💳 <b>A foglalás megerősítéséhez {amount} előleg szükséges</b>\nKártya: <code>{card}</code>{recipient}\nFizetési határidő: <b>{deadline}</b>, ellenkező esetben a foglalás automatikusan törlődik. Az előleg beszámít a szolgáltatás árába.\n\nA fizetés után nyomja meg a «✅ Fizettem» gombot, vagy küldjön ide egy képernyőképet 👇",
+        "prepay_recipient": "\nCímzett: {recipient}",
+        "btn_prepay_done": "✅ Fizettem",
+        "btn_prepay_done_item": "✅ Fizettem {short}",
+        "prepay_claimed_client": "Köszönjük! 🙏 Az adminisztrátor ellenőrzi a fizetést és megerősíti a foglalást — itt értesítjük.",
+        "prepay_screenshot_client": "Köszönjük, megkaptuk a képernyőképet! 🙏 Az adminisztrátor ellenőrzi a fizetést és megerősíti a foglalást — itt értesítjük.",
+        "prepay_photo_ask": "📸 Ez az előleg fizetéséről készült képernyőkép?",
+        "btn_photo_is_payment": "✅ Igen, ez a fizetés",
+        "btn_photo_other": "Nem, másról van szó",
+        "prepay_already_paid": "Az előleg már megerősítve ✅",
+        "prepay_paid_client": "✅ <b>Az előleg megérkezett — a foglalás megerősítve!</b>\n💈 {service} · {master}\n📅 {day}, {time}\n\nVárjuk Önt 💛",
+        "client_cancelled_unpaid": "😔 Sajnos a foglalását töröltük: az előleg nem érkezett meg időben.\n💈 {service} · {master}\n📅 {day}, {time}\n\nHa még aktuális, foglaljon újra — szívesen látjuk 💛",
+        "my_prepay_waiting": "\n💳 Várjuk az előleget ({amount}), határidő: {deadline}",
+        "my_prepay_claimed": "\n💳 Ellenőrizzük a fizetését ⏳",
+        "my_prepay_paid": "\n💳 Az előleg megérkezett ✅",
+        "already_booked": "✅ Erre az időpontra már foglalt.",
+        "slot_taken": "Hoppá, ezt az időpontot épp most foglalták le 😕 Kérjük, válasszon másikat:",
+        "week_limit": "Erre a hétre már elérte a foglalások maximális számát ({limit}) 🙏\nVálasszon másik hetet, vagy helyezze át az egyik meglévő foglalását.",
+        "too_many_active": "Már {count} aktív foglalása van — ez a maximum. "
+                           "Helyezze át vagy mondja le valamelyiket a «🗓 Foglalásaim» menüpontban.",
+        "booking_error": "Nem sikerült létrehozni a foglalást 😕 Kérjük, próbálja újra, vagy írjon nekünk.",
+        "proposal_declined": "Rendben 🙂 Írja meg, mit módosítsak, és keresek másik lehetőséget.",
+        # Foglalásaim
+        "my_none": "Még nincs közelgő foglalása 🙂\nÉppen ideje változtatni ezen — válasszon Önnek megfelelő időpontot 👇",
+        "my_header": "✨ <b>Az Ön foglalásai</b> ✨",
+        "my_item": "\n\n📅 <b>{day}, {time}</b>\n✂️ {service}\n💈 Fodrász: {master}",
+        "my_footer": "\n\n💛 Már várjuk Önt! Érkezzen néhány perccel korábban, hogy ellazulhasson "
+                     "és ráhangolódhasson az új megjelenésére ✨\n\nHa változnak a tervei, helyezze át vagy "
+                     "mondja le a foglalást az alábbi gombokkal 👇",
+        "btn_resched_item": "🔁 Áthelyezés {short}",
+        "btn_cancel_item": "❌ Lemondás {short}",
+        "cancel_ask": "Lemondja a foglalást?\n\n💈 {service} · {master}\n📅 {day}, {time}",
+        "btn_yes_cancel": "Igen, lemondom",
+        "btn_no": "Nem",
+        "cancel_kept": "Rendben, a foglalás megmarad ✅",
+        "cancelled": "A foglalás lemondva.\nReméljük, máskor találkozunk! Új foglaláshoz — «📅 Időpontfoglalás».",
+        "cancel_too_late": "A látogatásig kevesebb mint {hours} óra van hátra, ezért online már nem mondható le. "
+                           "Kérjük, hívjon minket{phone}.",
+        "cancel_too_late_phone": ": {phone}",
+        "booking_inactive": "Ez a foglalás már nem aktív.",
+        "resched_choose_day": "🔁 <b>Áthelyezés</b>\n💈 {service} · {master}\nJelenleg: {day}, {time}\n\nVálasszon új napot:",
+        "resched_choose_time": "🔁 <b>Áthelyezés</b>\n💈 {service} · {master}\n📅 {day}\n\nVálasszon új időpontot:",
+        "resched_card": "🔁 <b>Áthelyezi a foglalást?</b>\n\n💈 {service} · {master}\nEddig: {old}\nÚj időpont: <b>{new}</b>",
+        "btn_confirm_resched": "✅ Áthelyezés",
+        "rescheduled": "✅ A foglalás áthelyezve.\n\n💈 {service} · {master}\n📅 <b>{day}, {time}</b>",
+        "resched_none": "A következő {days} napban nincs szabad időpont 😕 Írjon nekünk, és megoldjuk.",
+        # Információk
+        "prices_header": "💈 <b>{name}</b>\n✨ <b>SZOLGÁLTATÁSOK ÉS ÁRAK</b> ✨\n<i>Válassza ki, ami tetszik — az alábbi gombbal rögtön foglalhat 👇</i>",
+        "price_group": "\n\n━━━━━━━━━━━━\n<b>{group}</b>",
+        "price_item": "\n\n<b>{title}</b> — {price}\n⏱ {duration} perc",
+        "price_desc": "\n{description}",
+        "prices_addons_header": "\n\n➕ <b>Kiegészítők a hajvágáshoz</b> (gombbal, foglalás közben)",
+        "price_addon_item": "\n{title} — +{price}, +{duration} perc",
+        "contacts_header": "📍 <b>{name}</b>",
+        "contacts_address": "\n\n🏠 {address}",
+        "contacts_phone": "\n📞 {phone}",
+        "contacts_hours": "\n\n🕒 <b>Nyitvatartás</b>\n{hours}",
+        "contacts_directions": "\n\n🚗 {directions}",
+        "contacts_payment": "\n💳 {payment}",
+        "contacts_prepay": "\n💳 Előleg: {amount} — a részleteket a foglalás után rögtön elküldjük (fizetési határidő: {hours} óra).",
+        "contacts_masters_header": "\n\n━━━━━━━━━━━━\n👥 <b>Fodrászaink</b>",
+        "contacts_master": "\n\n💈 <b>{name}</b>{about}\n🗓 {schedule}",
+        "contacts_master_about": "\n<i>{about}</i>",
+        "btn_map": "🗺 Megnyitás a térképen",
+        "day_off": "zárva",
+        # Emlékeztetők
+        "reminder": "⏰ <b>Emlékeztető a látogatásra</b>\n\n📅 {day}, {time}\n💈 {service} · {master}{address}",
+        "btn_will_come": "✅ Ott leszek",
+        "btn_resched": "🔁 Áthelyezés",
+        "btn_cancel_booking": "❌ Lemondás",
+        "will_come_ok": "\n\n✅ Remek, várjuk!",
+        "nudge": "Üdvözlöm, {name}! 👋\nMár {weeks} hete járt nálunk utoljára ({service}). "
+                 "Foglaljak Önnek új időpontot?",
+        "btn_book_again": "📅 Időpontfoglalás",
+        "btn_no_nudges": "🔕 Ne emlékeztessenek",
+        "nudges_off": "Rendben, többé nem emlékeztetem 🙂",
+        # AI és átadás az adminisztrátornak
+        "ai_off": "Kérjük, válasszon a menüből 👇 — így a leggyorsabb.",
+        "ai_error": "Elnézést, most nem tudok válaszolni 😔\nHasználja a menü gombjait 👇, vagy próbálja újra egy kicsit később.",
+        "ai_refusal": "Elnézést, ebben nem tudok segíteni 🙂 Tudok időpontot foglalni, vagy továbbíthatom a kérdését az adminisztrátornak.",
+        "rate_limited": "Túl sok üzenet rövid idő alatt 🙈 Használja a menü gombjait 👇, vagy írjon egy kicsit később.",
+        "handoff_client": "Továbbítottam a kérdését az adminisztrátornak — ebben a chatben fog válaszolni 🙌",
+        "handoff_no_admin": "Ebben a kérdésben érdemes közvetlenül az adminisztrátorhoz fordulni{phone} 🙏",
+        "media_received": "Megkaptam 👍 Továbbítom az adminisztrátornak — ebben a chatben fog válaszolni.",
+        "voice_unsupported": "A hangüzeneteket egyelőre nem tudom meghallgatni 🙈 Kérjük, írja le szövegesen.",
+        "unsupported": "Csak szöveges üzeneteket értek 🙂",
+        "paused_ack": "Köszönjük az üzenetét! Az adminisztrátor hamarosan válaszol.",
+        "admin_title": "Adminisztrátor",
+        "admin_reply_to_client": "👤 <b>{title}:</b>\n{text}",
+        "alert_expired": "Ez a gomb már nem érvényes. Kérjük, kezdje újra.",
+        "alert_no_access": "Nincs hozzáférés",
+        "unknown_command": "Ez a parancs ismeretlen 🤔 Válasszon a menüből 👇",
+        "myid": "Az Ön Telegram-azonosítója: <code>{id}</code>",
+        "state_cleared": "Megszakítva.",
+        # Admin
+        "admin_help": "🛠 <b>Vezérlőpult · {name}</b>\n\n"
+                      "/book — vendég foglalása (telefonos, helyszíni)\n"
+                      "/today — mai foglalások\n"
+                      "/tomorrow — holnapi foglalások\n"
+                      "/day 30.10 — foglalások egy tetszőleges napra\n"
+                      "/week — foglalások 7 napra\n"
+                      "/all — az összes közelgő foglalás\n"
+                      "/find — vendég keresése (név, @felhasználónév vagy telefonszám)\n"
+                      "/stats — statisztika és bevétel 30 napra (/stats 7 — 7 napra)\n"
+                      "/export — foglalások exportálása Excelbe\n"
+                      "/block — idő blokkolása (szabadnap, szabadság, telefonos foglalás)\n"
+                      "/blocks — blokkolt idők listája\n"
+                      "/masters — fodrászok a botban: meghívás, leválasztás\n"
+                      "/prices — szolgáltatások árainak módosítása\n"
+                      "/pause — AI kikapcsolása: minden vendégüzenet Önhöz kerül\n"
+                      "/resume — AI visszakapcsolása\n"
+                      "/reload — beállítások újratöltése a fájlból\n"
+                      "/myid — az Ön Telegram-azonosítója\n\n"
+                      "💬 Vendégnek válaszolni úgy lehet, hogy a bot által továbbított üzenetére válaszol (balra csúsztatás → «Válasz»).\n\n"
+                      "AI-válaszok: {ai_status}",
+        "ai_status_on": "✅ bekapcsolva",
+        "ai_status_paused": "⏸ szünetel (/resume)",
+        "ai_status_nokey": "⚪️ kikapcsolva (nincs API-kulcs a settings.toml fájlban)",
+        "ai_status_disabled": "⚪️ kikapcsolva a vállalkozás beállításaiban",
+        "adm_new_booking": "🆕 <b>Új foglalás</b>{via}\n\n👤 {client}\n💈 {service} · {master}\n📅 {day}, {time}\n💰 {price}",
+        "adm_via_ai": " · AI-chaten keresztül 🤖",
+        "adm_cancelled": "❌ <b>Lemondás</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day}, {time}",
+        "adm_rescheduled": "🔁 <b>Áthelyezés</b>\n\n👤 {client}\n💈 {service} · {master}\nEddig: {old}\nMost: <b>{new}</b>",
+        "adm_handoff": "🙋 <b>Az Ön válasza szükséges</b>\n\n👤 {client}\n❓ {reason}{summary}\n\n"
+                       "<b>Utolsó üzenetek:</b>\n{transcript}\n\n"
+                       "↩️ Válaszoljon erre az üzenetre (balra csúsztatás) — a bot továbbítja a válaszát a vendégnek. "
+                       "Az AI {hours} órára szünetel ennél a vendégnél.",
+        "adm_handoff_summary": "\n📝 {summary}",
+        "adm_reason_media": "A vendég fotót vagy fájlt küldött (talán fizetési igazolást)",
+        "adm_tr_client": "— Vendég: {text}",
+        "adm_tr_bot": "— Bot: {text}",
+        "adm_tr_empty": "(nincs)",
+        "btn_adm_reply": "✍️ Válasz",
+        "btn_adm_resume": "▶️ Bot visszakapcsolása",
+        "adm_client_msg": "💬 <b>{client}</b>:\n{text}",
+        "adm_client_media": "💬 {client}",
+        "adm_reply_prompt": "Írja meg a választ {client} részére egy üzenetben (vagy /cancel):",
+        "adm_reply_sent": "✅ Elküldve: {client}",
+        "adm_reply_failed": "⚠️ Nem sikerült elküldeni — lehet, hogy a vendég letiltotta a botot.",
+        "adm_resumed": "▶️ Az AI újra válaszol: {client}",
+        "adm_day_header": "📅 <b>{day}</b>{master} — foglalások: {count}",
+        "adm_day_empty": "📅 <b>{day}</b>{master} — nincs foglalás.",
+        "adm_item": "\n\n<b>{n}. {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}{flags}",
+        "adm_list_day": "\n\n📅 <b>{day}</b> — foglalások: {count}",
+        "adm_list_hint": "\n\nÁthelyezéshez, lemondáshoz vagy a fizetés jelöléséhez koppintson egy foglalásra 👇",
+        "adm_day_master": " · {name}",
+        "adm_day_hint": "\n\nÁthelyezéshez, lemondáshoz, meg nem jelenés vagy fizetés jelöléséhez koppintson egy foglalásra 👇",
+        "adm_day_pick": "📅 Válasszon napot:",
+        "adm_day_usage": "📅 Adjon meg egy dátumot, pl. /day 30.10 vagy /day holnap",
+        "btn_adm_booking_item": "⚙️ {n} · {when} · {client}",
+        "btn_day_prev": "◀️ {day}",
+        "btn_day_next": "{day} ▶️",
+        "btn_day_pick": "📅 Dátum",
+        "btn_master_all": "👥 Mind",
+        "btn_master_selected": "✅ {name}",
+        "adm_card": "📋 <b>Foglalás #{id}</b>\n\n{summary}\n💰 {price}",
+        "adm_card_source_buttons": "\n📱 A vendég foglalta",
+        "adm_card_source_ai": "\n🤖 AI-chaten keresztül foglalták",
+        "adm_card_source_admin": "\n📞 Adminisztrátor foglalta",
+        "adm_card_noshow": "\n🚫 Nem jelent meg",
+        "adm_card_cancelled": "\n❌ Lemondva — {by}",
+        "adm_card_confirmed": "\n✅ A vendég megerősítette, hogy jön",
+        "btn_adm_resched": "🔁 Áthelyezés",
+        "btn_adm_cancel_short": "🗑 Lemondás",
+        "btn_adm_noshow": "🚫 Nem jelent meg",
+        "btn_adm_client": "👤 Vendég",
+        "btn_adm_write": "✉️ Üzenet",
+        "adm_resched_day": "🔁 <b>A(z) #{id} foglalás áthelyezése</b>\n\n{summary}\n\nVálasszon új napot 👇",
+        "adm_resched_none": "🔁 Nincs szabad nap, ahová áthelyezhető lenne.\n\n{summary}",
+        "adm_resched_time": "🔁 <b>#{id}</b> · {service} · {master}\n📅 {day} — válasszon időpontot 👇",
+        "adm_resched_confirm": "🔁 <b>Áthelyezi a foglalást?</b>\n\n💈 {service}\n👤 {client}\nEddig: {old}\nÚj időpont: <b>{new}</b>\n\n{who}",
+        "btn_adm_resched_yes": "✅ Áthelyezés",
+        "adm_resched_same": "Ugyanaz az időpont — nem történt változás.",
+        "adm_resched_done": "🔁 <b>Áthelyezve</b>\n\n{summary}\n\nEddig: {old}\n{who}",
+        "adm_resched_notified": "A vendég értesítést kapott.",
+        "adm_resched_offline": "A vendég nincs a Telegramon — értesítse Ön.",
+        "adm_find_usage": "🔎 Vendég keresése: /find Ivan, /find @felhasználónév vagy /find 0671 (a telefonszám egy része)",
+        "adm_find_none": "🔎 Nincs találat erre: «{q}».",
+        "adm_find_many": "🔎 Találatok száma: {count}. Válasszon vendéget 👇",
+        "btn_adm_client_item": "👤 {label}",
+        "adm_client_card": "👤 <b>{name}</b>\n{contacts}\n{tg}\n\n📊 Látogatások: {done} · meg nem jelenések: {noshow} · lemondások: {cancelled}\n💰 Összesen: {spent}{last}{upcoming}{notes}",
+        "adm_client_tg_yes": "✉️ Használja a botot",
+        "adm_client_tg_no": "📵 Nincs a Telegramon",
+        "adm_client_last": "\n🗓 Utolsó látogatás: {day} · {service}",
+        "adm_client_upcoming": "\n\n<b>Közelgő:</b>{items}",
+        "adm_client_upcoming_item": "\n• {when} · {service}",
+        "adm_client_notes": "\n\n📝 {notes}",
+        "btn_adm_client_booking": "⚙️ {when} · {service}",
+        "btn_adm_client_book": "📞 Foglalás",
+        "adm_export_usage": "📊 /export — foglalások 30 napra és az összes közelgő; /export 90 — 90 napra.",
+        "adm_export_empty": "Erre az időszakra nincs foglalás.",
+        "adm_export_caption": "📊 Foglalások {start} óta (és az összes közelgő): {count}",
+        "adm_export_headers": "Dátum|Idő|Vége|Fodrász|Szolgáltatás|Ár|Állapot|Vendég|Telefon|Telegram|Forrás|Előleg|Megjegyzés|Létrehozva",
+        "adm_export_sheet": "Foglalások",
+        "adm_export_statuses": "tervezett|megtörtént|nem jelent meg|lemondva",
+        "adm_export_sources": "vendég|AI-chat|admin",
+        "adm_export_prepay": "várakozik|a vendég szerint fizetett|fizetve",
+        "adm_master_revenue": "\n   {name}: {count} · {revenue}",
+        "adm_evening_report": "🌙 <b>Napi összesítő · {day}</b>\n\n✅ Megtörtént: {done} · 🚫 meg nem jelenés: {noshow} · ❌ lemondva: {cancelled}\n💰 Bevétel: <b>{revenue}</b>{by_master}\n\n📅 Holnapi foglalások: {tomorrow}",
+        "client_rescheduled_by_admin": "🔁 Az adminisztrátor áthelyezte a foglalását:\n💈 {service} · {master}\nEddig: {old}\nMost: <b>{new}</b>\n\nHa az időpont nem megfelelő, módosítsa a «🗓 Foglalásaim» menüpontban, vagy írjon nekünk.",
+        "adm_booking_summary": "<b>{day}, {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}",
+        "adm_noshow_done": "🚫 {client} ({time}) — nem jelent meg",
+        "adm_cancel_ask": "Lemondja a foglalást?\n\n{booking}\n\n{who}",
+        "adm_cancel_notify": "A vendég Telegram-üzenetet kap.",
+        "adm_cancel_offline": "A vendég nincs a Telegramon — értesítse Ön.",
+        "adm_cancelled_done": "🗑 <b>Lemondva</b>\n\n{booking}\n\nA vendég értesítést kapott.",
+        "adm_cancelled_done_offline": "🗑 <b>Lemondva</b>\n\n{booking}\n\nA vendég nincs a Telegramon — értesítse Ön.",
+        "adm_cancelled_header": "\n\n➖➖➖\n❌ <b>Lemondva</b> — {count}",
+        "adm_cancelled_item": "\n{day} {start} · {master} · {service} · {client} — {by}",
+        "adm_cancelled_by_client": "a vendég mondta le",
+        "adm_cancelled_by_admin": "az adminisztrátor mondta le",
+        "adm_new_booking_prepay": "\n💳 Várjuk az előleget ({amount}), határidő: {deadline}",
+        "adm_prepay_claim_note": "💳 <b>A vendég szerint fizetett</b>\n\n{booking}\n\nEllenőrizze, megérkezett-e a(z) {amount}, és erősítse meg 👇",
+        "adm_prepay_screenshot": "💳 <b>A vendég fizetési képernyőképet küldött</b> (fent)\n\n{booking}\n\nEllenőrizze, megérkezett-e a(z) {amount}, és erősítse meg 👇",
+        "adm_prepay_overdue": "⏰ <b>A fizetés még nincs megerősítve</b>\nA vendég {hours} órával ezelőtt jelezte, hogy fizetett. Kérjük, ellenőrizze: az ilyen foglalások nem törlődnek automatikusan.\n\n{booking}",
+        "btn_adm_prepay_ok": "✅ A fizetés megérkezett",
+        "btn_adm_cancel_booking": "🗑 Foglalás lemondása",
+        "adm_prepay_ok_done": "✅ <b>Az előleg megerősítve</b>, a vendég értesítést kapott.\n\n{booking}",
+        "adm_prepay_ok_alert": "✅ Fizetés megerősítve",
+        "adm_prepay_already": "Az előleg már megerősítve.",
+        "adm_prepay_waiting": "\n💳 ⏳ előlegre vár",
+        "adm_prepay_claimed": "\n💳 ❔ a vendég szerint fizetett — kérjük, ellenőrizze",
+        "adm_prepay_paid": "\n💳 ✅ az előleg megérkezett",
+        "adm_cancelled_by_unpaid": "nem fizetett",
+        "adm_cancelled_unpaid": "⏰ <b>A foglalás automatikusan törölve</b> — az előleg nem érkezett meg {hours} órán belül.\n\n{booking}",
+        "btn_adm_clear_cancelled": "🧹 Lemondottak törlése ({count})",
+        "adm_clear_ask": "Eltávolítja a lemondott foglalásokat a listából ({count})?\nAz /all parancs már nem mutatja őket, de a statisztikában megmaradnak.",
+        "btn_adm_yes_clear": "Igen, törlöm",
+        "adm_cleared_done": "🧹 Lemondott foglalások törölve: {count}. Frissített lista — /all",
+        "btn_adm_yes_cancel": "Igen, lemondom",
+        "client_cancelled_by_admin": "Sajnos az adminisztrátor lemondta a foglalását:\n💈 {service} · {master}\n"
+                                     "📅 {day}, {time}\n\nKérjük, válasszon másik időpontot — «📅 Időpontfoglalás» — vagy írjon nekünk.",
+        "adm_week_header": "🗓 <b>Foglalások 7 napra</b>",
+        "adm_week_empty": "\n\nNincs foglalás.",
+        "adm_week_more": "\n\n➕ további {count} később — /all",
+        "adm_all_header": "🗓 <b>Az összes közelgő foglalás</b>",
+        "adm_note_line": "\n📝 {note}",
+        "adm_via_admin": " · adminisztrátor foglalta 📞",
+        "btn_adm_book_confirm": "✅ Foglalás",
+        "btn_adm_book_cancel": "✖️ Mégse",
+        "adm_book_service": "📞 <b>Vendég foglalása</b>\nVálasszon szolgáltatást:",
+        "adm_book_group": "📞 <b>Vendég foglalása</b>\nVálasszon kategóriát — utána szolgáltatás, fodrász, nap és időpont 👇",
+        "adm_book_in_group": "📞 <b>{group}</b>\nVálasszon szolgáltatást — utána fodrász, nap és időpont 👇",
+        "adm_book_master": "📞 {service}\nVálasszon fodrászt:",
+        "adm_book_day": "📞 {service} · {master}\nVálasszon napot:",
+        "adm_book_time": "📞 {service} · {master} · {day}\nVálasszon időpontot:",
+        "adm_book_no_days": "{master} nem rendelkezik szabad nappal ehhez: «{service}». Válasszon másik fodrászt:",
+        "adm_book_client_prompt": "📞 {service} · {master} · {day}, {time}\n\n"
+                                  "Küldje el a vendég adatait egy üzenetben: <b>név</b> és <b>telefonszám</b>, "
+                                  "megjegyzés új sorban (nem kötelező). Például:\n"
+                                  "<code>Éva +36301234567\nrövidebbre kéri, mint legutóbb</code>\n\n"
+                                  "Vagy ossza meg a vendég Telegram-névjegyét (📎 → Névjegy).\n/cancel — mégse.",
+        "adm_book_need_name": "Nem látom a vendég nevét. Küldje el újra: név, telefonszám, megjegyzés új sorban.",
+        "adm_book_card": "📞 <b>Ellenőrizze a foglalást</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day}, {time}\n"
+                         "💰 {price}{note}\n\n{hint}\n\nAz adatok módosításához egyszerűen küldje el őket újra.",
+        "adm_book_hint_tg": "✉️ A vendég már használja a botot ({client}) — üzenetet és emlékeztetőket kap.",
+        "adm_book_hint_known": "🗂 A vendég már szerepel az adatbázisban ({client}), de nincs a Telegramon — üzenetet nem kap.",
+        "adm_book_hint_offline": "📵 Új vendég Telegram nélkül — nem kap üzenetet és emlékeztetőt.",
+        "adm_book_duplicate": "A vendégnek már van foglalása erre az időpontra (#{id}).",
+        "adm_book_done": "✅ <b>Lefoglalva</b> <code>#{id}</code>\n👤 {client}\n💈 {service} · {master}\n"
+                         "📅 {day}, {time}{notified}",
+        "adm_book_notified": "\n\n✉️ A vendég Telegram-üzenetet kapott.",
+        "adm_book_not_notified": "\n\n📵 A vendég nem kapott üzenetet (nincs a Telegramon) — szükség esetén hívja fel.",
+        "adm_book_aborted": "A foglalás nem jött létre.",
+        "client_booked_by_admin": "📞 Az adminisztrátor lefoglalta Önnek:\n💈 {service} · {master}\n📅 {day}, {time}\n💰 {price}\n\n"
+                                  "Áthelyezéshez vagy lemondáshoz — «🗓 Foglalásaim».",
+        "adm_block_usage": "🔒 <b>Idő blokkolása</b>\n\nFormátum: <code>/block fodrász dátum [idő] [megjegyzés]</code>\n\n"
+                           "Példák:\n<code>/block {example} 30.10</code> — egész nap\n"
+                           "<code>/block {example} 30.10 14:00-16:00 telefonos foglalás</code>\n"
+                           "<code>/block mind 31.12</code> — szabadnap mindenkinek\n\nFodrászok: {masters}",
+        "adm_block_bad": "Nem értettem a parancsot 🤔\n\n{usage}",
+        "adm_block_done": "🔒 Blokkolva: {master}, {day} {range}{note}",
+        "adm_block_conflicts": "\n\n⚠️ Erre az időpontra vannak foglalások — mondja le őket (/today, /tomorrow), vagy figyelmeztesse a vendégeket:{lines}",
+        "adm_all_masters": "minden fodrász",
+        "adm_whole_day": "(egész nap)",
+        "adm_blocks_header": "🔒 <b>Blokkolt idők</b> (koppintson a törléshez):",
+        "adm_blocks_empty": "Nincs blokkolt idő.",
+        "btn_adm_block_item": "🗑 {master} · {day} {range}",
+        "adm_block_deleted": "🔓 Törölve. Ez az idő ismét foglalható.",
+        "adm_paused": "⏸ Az AI ki van kapcsolva. Minden vendégüzenet Önhöz kerül; a foglalási gombok továbbra is működnek.\n"
+                      "Bekapcsolás: /resume",
+        "adm_resumed_all": "▶️ Az AI újra válaszol a vendégeknek.",
+        "adm_reloaded": "🔄 Beállítások újratöltve: szolgáltatások — {services}, fodrászok — {masters}.",
+        "adm_reload_failed": "❌ Hiba van a beállítások fájljában, a korábbi beállítások maradnak érvényben:\n<code>{error}</code>",
+        "adm_reload_token": "\n⚠️ A bot tokenje megváltozott — az érvényesítéshez indítsa újra a botot.",
+        "adm_digest": "☀️ <b>Jó reggelt!</b>\n\n{body}",
+        "adm_ai_alert": "⚠️ <b>Az AI nem válaszol</b> ({name})\n<code>{error}</code>\n\n"
+                        "A bot gombokkal tovább működik. Ellenőrizze az API-kulcsot és az egyenleget a console.anthropic.com oldalon.",
+        "adm_budget_alert": "⚠️ Elérte a napi AI-limitet ({name}). A nap végéig a bot csak gombokkal működik. "
+                            "A limitet a settings.toml fájlban módosíthatja (daily_token_limit).",
+        "adm_stats": "📊 <b>Statisztika {days} napra</b>\n\n"
+                     "<b>Foglalások</b>\n"
+                     "• létrehozva: {created} (AI-chat: {by_ai}, gombok: {by_buttons}, admin: {by_admin})\n"
+                     "• éjszaka (22:00–08:00): {night}\n"
+                     "• teljesült: {done} · meg nem jelenés: {noshow} · lemondva: {cancelled}\n"
+                     "• közelgő: {upcoming}\n\n"
+                     "<b>Bevétel</b>\n"
+                     "• {revenue} · átlagos számla {avg_check}{by_master}\n"
+                     "• a közelgő foglalásokból várható: {expected}\n\n"
+                     "<b>Beszélgetések</b>\n"
+                     "• üzenetet író vendégek: {clients}\n"
+                     "• Önnek átadva: {handoffs}\n"
+                     "• a bot önállóan kezelte: {auto_rate}\n\n"
+                     "<b>Emlékeztetők</b>\n"
+                     "• elküldve: {reminders} · «Ott leszek»: {confirmed}\n\n"
+                     "<b>AI</b>\n"
+                     "• kezelt üzenetek: {ai_calls} · tokenek: {tokens}\n"
+                     "• becsült költség: ${cost}",
+        "adm_client_noname": "Vendég",
+        "cmd_start": "Főmenü",
+        "cmd_admin": "Tulajdonosi pult",
+        "cmd_today": "Mai foglalások",
+        "cmd_tomorrow": "Holnapi foglalások",
+        "cmd_book": "Vendég foglalása",
+        "cmd_day": "Foglalások egy napra",
+        "cmd_find": "Vendég keresése",
+        "cmd_export": "Exportálás Excelbe",
+        "cmd_week": "Foglalások 7 napra",
+        "cmd_all": "Az összes közelgő foglalás",
+        "cmd_stats": "Statisztika",
+        "cmd_block": "Idő blokkolása",
+        "cmd_blocks": "Blokkolt idők",
+        "cmd_pause": "AI kikapcsolása",
+        "cmd_resume": "AI bekapcsolása",
+        "cmd_reload": "Beállítások újratöltése",
+        "cmd_myid": "Az én Telegram-azonosítóm",
+        "cmd_masters": "Fodrászok a botban",
+        "cmd_prices": "Árak módosítása",
+        "adm_prices": "💰 <b>Szolgáltatások árai</b>\nAz ár módosításához koppintson egy szolgáltatásra 👇",
+        "adm_prices_changed": "\n\n✏️ — az ár itt, a botban módosult (a beállítások fájljában még a régi szerepel).",
+        "adm_price_ask": "💰 <b>{title}</b>\nJelenleg: <b>{price}</b>\n\nKüldje el az új árat számként, pl. 650.",
+        "adm_price_file": "\nA beállítások fájljában: {price}.",
+        "btn_adm_price_reset": "↩️ Visszaállítás: {price}",
+        "adm_price_bad": "Ez nem tűnik árnak 🤔 Csak egy számot küldjön, pl. 650. Mégse — /cancel",
+        "adm_price_done": "✅ <b>{title}</b>: {old} → <b>{new}</b>\nA vendégek és az AI már az új árat látják. "
+                          "A korábbi foglalások a régi árat tartják meg.",
+        "adm_price_combos": "\nA kiegészítőkkel kombinált árak újraszámolva.",
+        "adm_price_changed_note": "💰 {admin} módosította az árat: <b>{title}</b> {old} → <b>{new}</b>",
+        "cmd_my": "Az én napom",
+        "cmd_myweek": "Az én hetem",
+        "cmd_off": "Idő blokkolása",
+        "cmd_offs": "Blokkolt időim",
+        # Fodrászok: admin
+        "adm_masters": "✂️ <b>Fodrászok a botban</b>\n\nA csatlakoztatott fodrász látja a saját foglalásait, blokkolhatja a "
+                       "saját idejét, és értesítést kap a vendégeiről.\n{items}",
+        "adm_masters_on": "\n✅ <b>{name}</b> — {who}",
+        "adm_masters_off": "\n⚪️ <b>{name}</b> — nincs csatlakoztatva",
+        "btn_adm_master_invite": "🔗 Meghívás: {name}",
+        "btn_adm_master_unlink": "✖️ Leválasztás: {name}",
+        "btn_adm_yes_unlink": "✖️ Igen, leválasztom",
+        "btn_adm_open": "📋 Foglalás megnyitása",
+        "adm_master_invite": "🔗 Hivatkozás <b>{name}</b> fodrász számára:\n\n{link}\n\nKüldje tovább a fodrásznak — "
+                             "megnyitja, és megnyomja a «Start» gombot. Egyszer használható hivatkozás, {hours} óráig érvényes.",
+        "adm_master_no_username": "Nem sikerült lekérni a bot címét. Kérjük, próbálja újra egy perc múlva.",
+        "adm_master_unlink_ask": "Leválasztja <b>{name}</b> fodrászt a botról? Nem fogja látni a foglalásokat, "
+                                 "és nem kap értesítéseket.",
+        "adm_master_unlinked": "✖️ {name} fodrász leválasztva a botról.",
+        "adm_master_joined": "✂️ <b>{name}</b> fodrász csatlakozott a bothoz ({who}).",
+        "adm_master_noshow": "🚫 <b>{master} fodrász meg nem jelenést jelölt</b>\n\n{booking}",
+        "adm_master_off": "🌴 <b>{master}</b> fodrász blokkolt egy időt: {day} {range}",
+        "adm_master_off_conflicts": "\n\n⚠️ <b>Erre az időpontra vannak foglalások</b> — egyeztessen "
+                                    "a vendégekkel (áthelyezés vagy lemondás):{lines}",
+        "adm_master_on": "🔓 <b>{master}</b> fodrász feloldott egy időt: {day} {range}",
+        # Fodrászok: a fodrász
+        "mst_invite_bad": "Ez a hivatkozás érvénytelen vagy már felhasználták. Kérjen újat az adminisztrátortól.",
+        "mst_joined": "✅ <b>Csatlakozott „{name}” fodrászként.</b>\n\n",
+        "mst_start": "✂️ <b>{name}</b>, Ön fodrász a(z) „{shop}” botban.\n\n"
+                     "📅 <b>Az én napom</b> — a foglalásai, napok közti lapozás ◀️ ▶️\n"
+                     "🗓 <b>Az én hetem</b> — foglalások 7 napra\n"
+                     "🌴 <b>Idő blokkolása</b> — szabadnap, szünet, személyes ügyek\n"
+                     "🔒 <b>Blokkolt időim</b> — megtekintés és feloldás\n\n"
+                     "A bot értesíti az új foglalásokról, lemondásokról és áthelyezésekről, reggel elküldi a "
+                     "beosztását, és minden vendég előtt emlékezteti.",
+        "mst_unlinked": "Leválasztottuk a botról fodrászként. Vendégként továbbra is foglalhat 👇",
+        "btn_mst_day": "📅 Az én napom",
+        "btn_mst_week": "🗓 Az én hetem",
+        "btn_mst_off": "🌴 Idő blokkolása",
+        "btn_mst_offs": "🔒 Blokkolt időim",
+        "btn_mst_to_day": "⬅️ Vissza a naphoz",
+        "mst_day_hint": "\n\nA foglalás kártyájának megnyitásához koppintson rá 👇",
+        "mst_day_off": "\n\n🌴 A beosztása szerint szabadnap.",
+        "mst_day_blocks": "\n\n🔒 Blokkolva: {ranges}",
+        "mst_week_header": "🗓 <b>Foglalásai 7 napra</b>",
+        "mst_off_day": "🌴 <b>Idő blokkolása</b>\n\nVálasszon napot:",
+        "mst_off_range": "🌴 <b>{day}</b> · munkaideje: {hours}\n\nAz egész napot blokkolja, vagy mettől?",
+        "mst_off_whole_only": "🌴 <b>{day}</b> · {hours}\n\nBlokkolja az egész napot?",
+        "mst_off_no_work": "beosztás szerint szabadnap",
+        "mst_off_end": "🌴 <b>{day}</b>, {start}-tól\n\nMeddig?",
+        "btn_mst_whole_day": "🌴 Egész nap",
+        "btn_mst_off_yes": "✅ Blokkolás",
+        "mst_off_confirm": "Blokkolja: <b>{day} {range}</b>?\nA vendégek ezt az időt nem tudják lefoglalni.{conflicts}",
+        "mst_off_conflicts": "\n\n⚠️ Erre az időpontra vannak foglalások — az adminisztrátor értesítést kap, "
+                             "hogy egyeztessen a vendégekkel:{lines}",
+        "mst_off_done": "🔒 Blokkolva: <b>{day} {range}</b>. A vendégek ezt az időt nem tudják lefoglalni.",
+        "mst_off_done_conflicts": "\n\n⚠️ Erre az időpontra még vannak foglalások — az adminisztrátort értesítettük:{lines}",
+        "mst_offs_header": "🔒 <b>Blokkolt időim</b>\nA feloldáshoz koppintson:",
+        "mst_offs_header_none": "🔒 <b>Blokkolt időim</b>",
+        "mst_offs_admin": "\n\nAz adminisztrátor blokkolta (csak ő módosíthatja):{lines}",
+        "mst_offs_empty": "🔒 Nincs blokkolt idő. Blokkoláshoz — „🌴 Idő blokkolása”.",
+        "btn_mst_block_item": "🗑 {label}",
+        "alert_mst_opened": "Az idő ismét foglalható",
+        "mst_new": "🆕 <b>Új foglalás Önhöz</b>\n\n📅 {day}, {time}\n💈 {service}\n👤 {client}",
+        "mst_cancelled": "❌ <b>Foglalás lemondva</b>\n\n📅 {day}, {time}\n💈 {service}\n👤 {client}",
+        "mst_moved": "🔁 <b>A foglalás másik fodrászhoz került</b>\n\n📅 {day}, {time}\n💈 {service}\n👤 {client}",
+        "mst_rescheduled": "🔁 <b>Foglalás áthelyezve</b>\n\n💈 {service}\n👤 {client}\nEddig: {old}\nMost: <b>{new}</b>",
+        "mst_digest": "☀️ <b>Jó reggelt, {name}!</b>\n\n{body}",
+        "mst_heads_up": "⏰ <b>{time}-kor</b> ({min} perc múlva) — {client}\n💈 {service}",
     },
 }
 
