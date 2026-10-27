@@ -88,6 +88,20 @@ class LinkingTests(MasterTestCase):
         self.assertEqual(self.tg.of("deleteMyCommands")[-1]["scope"]["chat_id"], MASTER_ID)
         self.assertEqual(self.app.master_links(self.tenant), {})
 
+    async def test_admin_unlinks_self_gets_client_menu(self):
+        code = await self.invite()
+        await self.admin(f"/start {code}")
+        menus = [m["reply_markup"]["keyboard"] for m in self.tg.of("sendMessage")
+                 if m["chat_id"] == ADMIN_ID and "keyboard" in m.get("reply_markup", {})]
+        self.assertIn("📅 Мій день", [b["text"] for row in menus[-1] for b in row])
+
+        await self.press("aMuy:oleg", uid=ADMIN_ID)
+        last = self.last(ADMIN_ID)
+        self.assertIn("Вас відключено", last["text"])
+        keyboard = [b["text"] for row in last["reply_markup"]["keyboard"] for b in row]
+        self.assertEqual(keyboard, ["📅 Записатися", "🗓 Мої записи", "💈 Послуги і ціни", "📍 Контакти"])
+        self.assertEqual(self.app.master_links(self.tenant), {})
+
     async def test_expired_and_new_invite_replaces_old(self):
         old = await self.invite()
         new = await self.invite()

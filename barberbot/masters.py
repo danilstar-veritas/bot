@@ -127,7 +127,11 @@ class MasterPanel:
             return
         ctx.db.kv_delete(tenant.slug, f"master_tg:{master_id}")
         await ctx.show(message_id, ctx.at("adm_master_unlinked", name=master.name))
-        if tg != ctx.chat_id:
+        if tg == ctx.chat_id:
+            # Адмін відключив сам себе: редагування не змінює нижнє меню, тож надсилаємо нове — клієнтське.
+            ctx.master_id = None
+            await ctx.send(ctx.t("mst_unlinked"), self.main_kb(ctx))
+        else:
             await self.send(tenant, tg, tenant.t(tenant.lang, "mst_unlinked"), self.client_kb(ctx, tenant.lang))
         await self._chat_commands_quiet(tenant, tg, master=False)
 
