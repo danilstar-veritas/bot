@@ -223,6 +223,17 @@ class Settings:
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash"
     gemini_api_base: str = "https://generativelanguage.googleapis.com"
+    # Instagram / Messenger (Meta): вебхук, на який Meta надсилає повідомлення клієнтів.
+    meta_app_secret: str = ""     # App Secret застосунку Meta — ним перевіряємо підпис кожного вебхука
+    meta_verify_token: str = ""   # довільний рядок, який ви вписуєте в налаштуваннях вебхука на developers.facebook.com
+    meta_webhook_host: str = "127.0.0.1"
+    meta_webhook_port: int = 8088
+    meta_graph_base: str = "https://graph.facebook.com"
+    meta_graph_version: str = "v23.0"
+
+    @property
+    def meta_enabled(self) -> bool:
+        return bool(self.meta_app_secret and self.meta_verify_token)
 
     @property
     def ai_available(self) -> bool:
@@ -263,6 +274,7 @@ def load_settings(path: Path, base_dir: Path | None = None) -> Settings:
     thinking = adv.str("thinking", "adaptive").lower()
     if thinking not in ("adaptive", "disabled"):
         raise ConfigError(f"{path.name} → thinking: допустимо adaptive або disabled.")
+    meta = s.section("meta")
     data_dir = Path(adv.str("data_dir", "data") or "data")
     if not data_dir.is_absolute():
         data_dir = base_dir / data_dir
@@ -289,6 +301,12 @@ def load_settings(path: Path, base_dir: Path | None = None) -> Settings:
         gemini_api_key=gemini_key,
         gemini_model=s.str("gemini_model", "gemini-3.5-flash") or "gemini-3.5-flash",
         gemini_api_base=adv.str("gemini_api_base", "https://generativelanguage.googleapis.com").rstrip("/"),
+        meta_app_secret=os.environ.get("META_APP_SECRET", "").strip() or meta.str("app_secret"),
+        meta_verify_token=meta.str("verify_token"),
+        meta_webhook_host=meta.str("webhook_host", "127.0.0.1") or "127.0.0.1",
+        meta_webhook_port=meta.int("webhook_port", 8088, 1, 65535),
+        meta_graph_base=meta.str("graph_base", "https://graph.facebook.com").rstrip("/") or "https://graph.facebook.com",
+        meta_graph_version=meta.str("graph_version", "v23.0") or "v23.0",
     )
 
 
@@ -390,6 +408,14 @@ class Tenant:
     report_at: time | None = None  # коли надсилати власнику вечірній підсумок дня (None — не надсилати)
     master_heads_up_min: int = 15  # за скільки хвилин нагадати майстру про клієнта (0 — не нагадувати)
     info_i18n: dict[str, dict[str, str]] = field(default_factory=dict)  # переклади [info]: directions_de = …
+    # Instagram / Messenger: сторінка Facebook закладу, прив'язаний Instagram і токен сторінки.
+    meta_page_id: str = ""
+    meta_instagram_id: str = ""
+    meta_page_token: str = ""
+
+    @property
+    def meta_enabled(self) -> bool:
+        return bool(self.meta_page_id and self.meta_page_token)
 
     @property
     def prepay_enabled(self) -> bool:
@@ -664,6 +690,17 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
     if prepay_on and not prepay_card:
         warnings.append("[prepayment] увімкнено, але не вказано card — передоплату вимкнено, поки не впишете картку.")
 
+    meta = s.section("meta")
+    meta_page_id, meta_ig_id = meta.str("page_id"), meta.str("instagram_id")
+    meta_token = meta.str("page_access_token")
+    for key, value in (("page_id", meta_page_id), ("instagram_id", meta_ig_id)):
+        if value and not value.isdigit():
+            raise ConfigError(f"{where} → [meta] → {key}: лише цифри (ID з налаштувань сторінки чи акаунта).")
+    if (meta_page_id or meta_ig_id) and not meta_token:
+        warnings.append("[meta] вказано сторінку, але немає page_access_token — Instagram/Messenger вимкнено.")
+    if meta_token and not meta_page_id:
+        raise ConfigError(f"{where} → [meta] → page_id: вкажіть ID сторінки Facebook, до якої належить токен.")
+
     ai = s.section("ai")
     address_form = ai.str("address_form", "ви").lower() or "ви"
     if address_form not in ("ви", "ти"):
@@ -816,6 +853,9 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         report_at=report_at,
         master_heads_up_min=n.int("master_heads_up_min", 15, 0, 240),
         info_i18n=info_i18n,
+        meta_page_id=meta_page_id,
+        meta_instagram_id=meta_ig_id,
+        meta_page_token=meta_token if meta_page_id else "",
     )
 
 

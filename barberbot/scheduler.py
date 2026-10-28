@@ -78,7 +78,7 @@ class Scheduler:
                 lang = b["lang"] or tenant.lang
                 await app.send(tenant, b["tg_id"], tenant.t(
                     lang, "client_cancelled_unpaid", **tenant.booking_names(b, lang),
-                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
+                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)), tag="event")
             await app.notify_master(tenant, b, "mst_cancelled")
             client = db.get_client(b["client_id"])
             await app.notify_admins(tenant, tenant.t(tenant.lang, "adm_cancelled_unpaid", hours=tenant.prepay_hours,
@@ -116,7 +116,7 @@ class Scheduler:
             if due and not b["blocked"]:
                 lang = b["lang"] or tenant.lang
                 sent_msg = await app.send(tenant, b["tg_id"], app.reminder_text(tenant, b, lang),
-                                          app.reminder_kb(tenant, b, lang))
+                                          app.reminder_kb(tenant, b, lang), tag="event")
                 if sent_msg:
                     db.log_event(slug, b["client_id"], "reminder_sent", now, {"id": b["id"], "hours": min(due)})
 

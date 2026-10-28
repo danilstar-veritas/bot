@@ -98,6 +98,14 @@ ukránul, angolul vagy németül az ügyfél nyelvén válaszolj, udvariasan (n�
 """
 
 
+# ── Instagram / Facebook Messenger (необов'язково) ──────────────────
+# Клієнти пишуть у Direct чи Messenger — бот відповідає й записує так само, як у Telegram.
+# Як отримати ці значення — README, розділ «Instagram і Facebook». Токен — лише на сервері, не в git.
+# [meta]
+# page_id = ""               # ID сторінки Facebook закладу
+# instagram_id = ""          # ID Instagram-акаунта (professional), прив'язаного до цієї сторінки
+# page_access_token = ""     # токен сторінки (довгостроковий)
+
 [schedule]
 mon = "09:00-19:00"
 tue = "09:00-19:00"

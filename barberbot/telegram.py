@@ -145,6 +145,10 @@ class HttpPool:
 
     def post(self, url: str, body: bytes, headers: dict, timeout: float) -> tuple[int, bytes, http.client.HTTPMessage]:
         """Повертає (статус, тіло, заголовки). Помилки мережі — винятки з NET_ERRORS."""
+        return self.request("POST", url, body, headers, timeout)
+
+    def request(self, method: str, url: str, body: bytes | None, headers: dict,
+                timeout: float) -> tuple[int, bytes, http.client.HTTPMessage]:
         parts = urllib.parse.urlsplit(url)
         https = parts.scheme == "https"
         key = (parts.scheme, parts.hostname or "", parts.port or (443 if https else 80))
@@ -160,7 +164,7 @@ class HttpPool:
             if conn.sock is not None:
                 conn.sock.settimeout(timeout)
             try:
-                conn.request("POST", path, body=body, headers=headers)
+                conn.request(method, path, body=body, headers=headers)
                 resp = conn.getresponse()
                 data = resp.read()
             except (ConnectionResetError, BrokenPipeError, http.client.RemoteDisconnected,

@@ -107,6 +107,14 @@ extra_instructions = """
 """
 
 
+# ── Instagram / Facebook Messenger (необов'язково) ──────────────────
+# Клієнти пишуть у Direct чи Messenger — бот відповідає й записує так само, як у Telegram.
+# Як отримати ці значення — README, розділ «Instagram і Facebook». Токен — лише на сервері, не в git.
+# [meta]
+# page_id = ""               # ID сторінки Facebook закладу
+# instagram_id = ""          # ID Instagram-акаунта (professional), прив'язаного до цієї сторінки
+# page_access_token = ""     # токен сторінки (довгостроковий)
+
 # Графік роботи за замовчуванням для всіх майстрів.
 # Формат: "10:00-19:00", з перервою: "10:00-14:00, 15:00-19:00", вихідний: "off".
 [schedule]

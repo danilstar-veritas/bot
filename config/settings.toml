@@ -49,6 +49,13 @@ output = 0
 cache_read = 0
 cache_write = 0
 
+# Instagram Direct і Facebook Messenger (необов'язково). Як підключити — README, розділ «Instagram і Facebook».
+# Сторінку й токен кожного закладу вказують у його файлі, у розділі [meta].
+[meta]
+app_secret = ""              # App Secret застосунку Meta: developers.facebook.com → ваш застосунок → App settings → Basic
+verify_token = ""            # будь-який довгий рядок; той самий впишіть у налаштуваннях вебхука застосунку
+webhook_port = 8088          # бот слухає 127.0.0.1:8088, а HTTPS-адресу для Meta дає Caddy (див. README)
+
 # Технічні параметри — зазвичай змінювати не потрібно.
 [advanced]
 thinking = "adaptive"        # adaptive або disabled

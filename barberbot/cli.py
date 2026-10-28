@@ -166,6 +166,23 @@ def cmd_check() -> int:
             except NetworkError as e:
                 problems += 1
                 print(f"   {FAIL} Немає зв'язку з Telegram: {e}")
+        if t.meta_enabled:
+            from .meta import MetaChannel, MetaError
+
+            channel = MetaChannel(t, settings, db)
+            where = "Instagram і Messenger" if t.meta_instagram_id else "Messenger"
+            try:
+                page = channel._call_sync("GET", t.meta_page_id, {"fields": "name"})
+                print(f"   {OK} {where}: сторінка «{page.get('name') or t.meta_page_id}» — токен правильний")
+            except MetaError as e:
+                problems += 1
+                print(f"   {FAIL} Meta відхилила токен сторінки: {e.message}. Перевірте [meta] page_access_token.")
+            except NetworkError as e:
+                problems += 1
+                print(f"   {FAIL} Немає зв'язку з Meta: {e}")
+            if not settings.meta_enabled:
+                problems += 1
+                print(f"   {FAIL} У settings.toml немає [meta] app_secret і verify_token — вебхук не запуститься.")
         print()
 
     db.close()

@@ -22,6 +22,7 @@ from .booking import BookingError, BookingService
 from .config import RANGE_RE, ConfigError, Settings, Tenant, fmt_hhmm, load_tenant, parse_hhmm, parse_user_date
 from .db import DB, dt_str, parse_dt
 from .masters import MASTER_COMMANDS, MasterPanel
+from .meta import PLATFORM_LABEL, MetaChannel, MetaGateway, MetaRouter, MetaWebhook, platform_of
 from .stats import compute_stats
 from .telegram import NetworkError, TelegramAPI, TelegramError, chunk_text, ibtn, inline_kb, reply_kb, url_btn
 from .texts import Raw
@@ -163,12 +164,20 @@ class Ctx:
 
 
 class BotApp(AdminPanel, MasterPanel):
-    def __init__(self, settings: Settings, tenants: list[Tenant], db: DB, llm=None, api_factory=None):
+    def __init__(self, settings: Settings, tenants: list[Tenant], db: DB, llm=None, api_factory=None,
+                 meta_transport=None):
         self.settings = settings
         self.db = db
         self.tenants: dict[str, Tenant] = {t.slug: t for t in tenants if t.enabled}
         factory = api_factory or (lambda t: TelegramAPI(t.bot_token, settings.telegram_api_base))
         self.apis = {slug: factory(t) for slug, t in self.tenants.items()}
+        # Instagram / Messenger: для закладів із [meta] клієнти з Meta йдуть через той самий API-об'єкт.
+        self.meta_routers: dict[str, MetaRouter] = {}
+        for slug, t in self.tenants.items():
+            if t.meta_enabled:
+                self.meta_routers[slug] = MetaRouter(self.apis[slug], MetaChannel(t, settings, db, meta_transport))
+                self.apis[slug] = self.meta_routers[slug]
+        self.meta = MetaGateway(self, self.meta_routers) if self.meta_routers else None
         self.bookings = {slug: BookingService(t, db) for slug, t in self.tenants.items()}
         for t in self.tenants.values():
             self.apply_prices(t)
@@ -194,10 +203,23 @@ class BotApp(AdminPanel, MasterPanel):
 
         tasks = [asyncio.create_task(self.poll(slug), name=f"poll:{slug}") for slug in self.tenants]
         tasks.append(asyncio.create_task(Scheduler(self).run(), name="scheduler"))
+        webhook = None
+        if self.meta and not self.settings.meta_enabled:
+            log.warning("Instagram/Messenger налаштовано в закладі, але в settings.toml немає [meta] app_secret "
+                        "і verify_token — вебхук не запущено")
+        elif self.meta:
+            webhook = MetaWebhook(self, self.meta, self.settings)
+            try:
+                await webhook.start()
+            except OSError as e:
+                log.error("Не вдалося запустити вебхук Instagram/Messenger: %s", e)
+                webhook = None
         try:
             await self.stop_event.wait()
         finally:
             self.stopping = True
+            if webhook:
+                await webhook.stop()
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -321,7 +343,9 @@ class BotApp(AdminPanel, MasterPanel):
 
     # ================================================================ надсилання
     async def send(self, tenant: Tenant, chat_id: int, text: str, kb: dict | None = None,
-                   parse_mode: str | None = "HTML") -> dict | None:
+                   parse_mode: str | None = "HTML", tag: str | None = None) -> dict | None:
+        """tag — для клієнтів з Instagram/Messenger поза 24-годинним вікном Meta:
+        "event" (нагадування, зміни запису) або "human" (відповідь адміністратора)."""
         if chat_id < 0:
             return None  # клієнт без Telegram (записаний адміністратором)
         api = self.apis[tenant.slug]
@@ -329,6 +353,8 @@ class BotApp(AdminPanel, MasterPanel):
         last = None
         for i, chunk in enumerate(chunks):
             params = {"chat_id": chat_id, "text": chunk, "link_preview_options": {"is_disabled": True}}
+            if tag and platform_of(chat_id):
+                params["_meta_tag"] = tag
             if parse_mode:
                 params["parse_mode"] = parse_mode
             if kb is not None and i == len(chunks) - 1:
@@ -388,6 +414,9 @@ class BotApp(AdminPanel, MasterPanel):
             or " ".join(p for p in (row["first_name"], row["last_name"]) if p) \
             or tenant.t(tenant.lang, "adm_client_noname")
         parts = [name]
+        platform = platform_of(row["tg_id"]) if "tg_id" in keys else None
+        if platform:
+            parts.append(PLATFORM_LABEL[platform])
         if row["username"]:
             parts.append(f"@{row['username']}")
         if row["phone"]:
@@ -769,8 +798,9 @@ class BotApp(AdminPanel, MasterPanel):
         title = tenant.info_in("admin_title", lang) or tenant.t(lang, "admin_title")
         try:
             if text:
+                extra = {"_meta_tag": "human"} if platform_of(client["tg_id"]) else {}
                 await ctx.api.call("sendMessage", chat_id=client["tg_id"], parse_mode="HTML",
-                                   text=tenant.t(lang, "admin_reply_to_client", title=title, text=text))
+                                   text=tenant.t(lang, "admin_reply_to_client", title=title, text=text), **extra)
             else:
                 await ctx.api.call("copyMessage", chat_id=client["tg_id"], from_chat_id=ctx.chat_id,
                                    message_id=msg["message_id"])
@@ -1736,7 +1766,7 @@ class BotApp(AdminPanel, MasterPanel):
             notified = await self.send(tenant, client["tg_id"], tenant.t(
                 lang, "client_booked_by_admin", **tenant.booking_names(b, lang),
                 day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start),
-                price=tenant.price_str(b["price"]))) is not None
+                price=tenant.price_str(b["price"])), tag="event") is not None
             if notified:
                 add_note(db, tenant, client["id"], f"Адміністратор записав клієнта: запис №{b['id']}, "
                          f"{b['service_title']}, {b['master_name']}, {start:%d.%m.%Y} о {fmt_hhmm(start)}.",
@@ -1922,7 +1952,7 @@ class BotApp(AdminPanel, MasterPanel):
                 start = parse_dt(b["start_at"])
                 await self.send(tenant, client["tg_id"], tenant.t(
                     lang, "client_cancelled_by_admin", **tenant.booking_names(b, lang),
-                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
+                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)), tag="event")
                 add_note(ctx.db, tenant, client["id"], f"Адміністратор скасував запис №{b['id']}.", self.settings)
         elif op == "aPy" and len(a) == 1:
             b = ctx.db.get_booking(_int(a[0]))
@@ -1938,7 +1968,7 @@ class BotApp(AdminPanel, MasterPanel):
                 start = parse_dt(b["start_at"])
                 await self.send(tenant, client["tg_id"], tenant.t(
                     lang, "prepay_paid_client", **tenant.booking_names(b, lang),
-                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
+                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)), tag="event")
                 add_note(ctx.db, tenant, client["id"], f"Адміністратор підтвердив передоплату за запис №{b['id']}.",
                          self.settings)
             return ctx.at("adm_prepay_ok_alert")

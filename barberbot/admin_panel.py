@@ -251,7 +251,7 @@ class AdminPanel:
                 old=f"{tenant.day_label(parse_dt(old['start_at']).date(), lang)}, {old['start_at'][11:16]}"
                     + (f" · {tenant.booking_names(old, lang)['master']}" if moved else ""),
                 new=f"{tenant.day_label(start.date(), lang)}, {fmt_hhmm(start)}"
-                    + (f" · {names['master']}" if moved else "")))
+                    + (f" · {names['master']}" if moved else "")), tag="event")
             add_note(ctx.db, tenant, client["id"], f"Адміністратор переніс запис №{new['id']} на "
                      f"{start:%d.%m.%Y} о {fmt_hhmm(start)} ({new['master_name']}).", self.settings)
 
