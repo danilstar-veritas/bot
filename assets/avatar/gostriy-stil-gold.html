@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;background:#0A1B33}
+svg{display:block}
+</style></head><body>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#143561"/><stop offset="1" stop-color="#07142A"/></radialGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6DE8D"/><stop offset=".5" stop-color="#D4AF37"/><stop offset="1" stop-color="#A9822A"/></linearGradient>
+</defs>
+<rect width="640" height="640" fill="url(#bg)"/>
+<circle cx="320" cy="320" r="288" fill="none" stroke="url(#gold)" stroke-width="5"/>
+<circle cx="320" cy="320" r="272" fill="none" stroke="url(#gold)" stroke-width="1.5"/>
+
+<!-- scissors emblem -->
+<g transform="translate(320 178)" fill="url(#gold)">
+  <!-- blades -->
+  <path d="M-4 6 C-14 -20 -34 -56 -52 -86 C-44 -80 -22 -50 6 -4 Z"/>
+  <path d="M4 6 C14 -20 34 -56 52 -86 C44 -80 22 -50 -6 -4 Z"/>
+  <!-- shanks + rings -->
+  <g fill="none" stroke="url(#gold)" stroke-width="7" stroke-linecap="round">
+    <path d="M-1 4 C-14 24 -34 40 -38 54"/>
+    <path d="M1 4 C14 24 34 40 38 54"/>
+    <ellipse cx="-43" cy="68" rx="15" ry="17" transform="rotate(14 -43 68)"/>
+    <ellipse cx="43" cy="68" rx="15" ry="17" transform="rotate(-14 43 68)"/>
+  </g>
+  <circle cx="0" cy="2" r="5.5" fill="#0A1B33" stroke="url(#gold)" stroke-width="3"/>
+</g>
+
+<!-- monogram -->
+<text x="320" y="428" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="168" letter-spacing="6" fill="url(#gold)">ГС</text>
+
+<!-- divider -->
+<g stroke="#D4AF37" stroke-width="2" fill="none">
+  <path d="M170 462 H292"/><path d="M348 462 H470"/>
+</g>
+<path d="M320 452 L327 462 L320 472 L313 462 Z" fill="url(#gold)"/>
+
+<text x="320" y="512" text-anchor="middle" font-family="'Trebuchet MS', Futura, sans-serif" font-weight="700" font-size="30" letter-spacing="9" fill="#EAF0F8">ГОСТРИЙ СТИЛЬ</text>
+</svg></body></html>

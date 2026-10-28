@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#14171B}svg{display:block}</style></head><body>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#22272D"/><stop offset="1" stop-color="#101316"/></radialGradient>
+<path id="top" d="M82 320 A238 238 0 0 1 558 320"/>
+<path id="bot" d="M52 320 A268 268 0 0 0 588 320"/>
+</defs>
+<rect width="640" height="640" fill="url(#bg)"/>
+<circle cx="320" cy="320" r="300" fill="none" stroke="#EFE6D2" stroke-width="8"/>
+<circle cx="320" cy="320" r="284" fill="none" stroke="#EFE6D2" stroke-width="2"/>
+<circle cx="320" cy="320" r="214" fill="none" stroke="#EFE6D2" stroke-width="3"/>
+<circle cx="320" cy="320" r="206" fill="none" stroke="#B5342B" stroke-width="2"/>
+
+<g font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="40" fill="#EFE6D2" text-anchor="middle" letter-spacing="7">
+  <text><textPath href="#top" startOffset="50%">ГОСТРИЙ СТИЛЬ</textPath></text>
+</g>
+<g font-family="'Trebuchet MS', Futura, sans-serif" font-weight="700" font-size="25" fill="#EFE6D2" text-anchor="middle" letter-spacing="8">
+  <text><textPath href="#bot" startOffset="50%">БАРБЕРШОП · КИЇВ</textPath></text>
+</g>
+<!-- side diamonds -->
+<path d="M70 320 l9 -9 l9 9 l-9 9 Z" fill="#B5342B"/>
+<path d="M552 320 l9 -9 l9 9 l-9 9 Z" fill="#B5342B"/>
+
+<!-- comb -->
+<g transform="translate(320 320) scale(1.22) rotate(40)">
+  <g fill="#EFE6D2" stroke="#14171B" stroke-width="5" paint-order="stroke">
+    <rect x="-95" y="-52" width="190" height="30" rx="8"/>
+    <g id="teeth"></g>
+  </g>
+  <g fill="#EFE6D2">
+    <script>/* teeth generated below */</script>
+  </g>
+</g>
+<script>
+(function(){
+  var g=document.getElementById('teeth'),ns='http://www.w3.org/2000/svg';
+  for(var i=0;i<18;i++){var r=document.createElementNS(ns,'rect');r.setAttribute('x',-90+i*10.5);r.setAttribute('y',-26);r.setAttribute('width',6);r.setAttribute('height',i%2?62:62);r.setAttribute('rx',2.5);g.appendChild(r);}
+})();
+</script>
+
+<!-- straight razor -->
+<g transform="translate(320 320) scale(1.22) rotate(-40) translate(24 0)">
+  <g stroke="#14171B" stroke-width="5" paint-order="stroke">
+    <!-- handle -->
+    <path d="M-150 -15 H-52 Q-40 -15 -40 -3 V3 Q-40 15 -52 15 H-150 Q-166 15 -166 0 Q-166 -15 -150 -15 Z" fill="#B5342B"/>
+    <!-- blade -->
+    <path d="M-38 -16 H98 Q116 -16 118 -2 L112 12 Q104 20 88 20 H-38 Z" fill="#EFE6D2"/>
+  </g>
+  <path d="M-30 -6 H100" stroke="#14171B" stroke-opacity=".35" stroke-width="2"/>
+  <circle cx="-44" cy="0" r="6" fill="#14171B" stroke="#EFE6D2" stroke-width="3"/>
+  <path d="M-150 -8 H-70 M-150 8 H-70" stroke="#14171B" stroke-opacity=".35" stroke-width="2"/>
+</g>
+</svg></body></html>
