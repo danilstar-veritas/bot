@@ -512,6 +512,9 @@ class BotApp(AdminPanel, MasterPanel):
             await ctx.send(ctx.t("unknown_command"), self.main_kb(ctx))
 
     async def cmd_start(self, ctx: Ctx) -> None:
+        if ctx.is_admin or ctx.master_id:
+            # Під час запуску бота Telegram не дає задати меню в чаті, який ще не відкривали, — задаємо тут.
+            await self._chat_commands_quiet(ctx.tenant, ctx.chat_id, bool(ctx.master_id))
         if ctx.master_id:
             text = self.master_start_text(ctx)
             if ctx.is_admin:

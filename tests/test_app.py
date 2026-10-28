@@ -79,6 +79,13 @@ class ClientButtonsTests(BotTestCase):
         await self.send(msg(text="📅 Book", lang="en"))
         self.assertEqual(self.tg.last(CLIENT_ID)["text"], "Choose a service:")
 
+    async def test_admin_start_sets_admin_command_menu(self):
+        await self.send(msg(uid=ADMIN_ID, text="/start"))
+        commands = [p for p in self.tg.of("setMyCommands") if p.get("scope", {}).get("chat_id") == ADMIN_ID][-1]
+        self.assertIn("today", [c["command"] for c in commands["commands"]])
+        await self.send(msg(text="/start"))  # звичайному клієнту окреме меню не задаємо
+        self.assertFalse([p for p in self.tg.of("setMyCommands") if p.get("scope", {}).get("chat_id") == CLIENT_ID])
+
     async def test_menu_in_hungarian(self):
         await self.send(msg(text="/start", lang="hu"))
         kb = self.tg.last(CLIENT_ID)["reply_markup"]["keyboard"]
