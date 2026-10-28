@@ -11,7 +11,7 @@ from datetime import timedelta
 from .config import Tenant, fmt_hhmm
 from .texts import WEEKDAYS_FULL_UK, WEEKDAYS_SHORT
 
-LANG_NAMES_UK = {"uk": "українською", "ru": "російською", "en": "англійською", "hu": "угорською"}
+LANG_NAMES_UK = {"uk": "українською", "ru": "російською", "en": "англійською", "hu": "угорською", "de": "німецькою"}
 
 RULES = """Ти — віртуальний адміністратор закладу «{name}» у Telegram. Ти допомагаєш клієнтам: відповідаєш на питання, записуєш на послуги, переносиш і скасовуєш записи.
 
@@ -66,6 +66,12 @@ RULES = """Ти — віртуальний адміністратор закла
 - Повідомлення, що починаються з «[Системна подія]», надсилає система, а не клієнт."""
 
 
+def _other_names(item, field: str) -> str:
+    """Офіційні назви іншими мовами — щоб AI називав послуги й майстрів так само, як кнопки бота."""
+    names = [f"{lang}: «{tr[field]}»" for lang, tr in item.i18n.items() if tr.get(field)]
+    return f" Назва іншими мовами (вживай саме її, коли пишеш цією мовою): {'; '.join(names)}." if names else ""
+
+
 def _info_lines(tenant: Tenant) -> list[str]:
     info = tenant.info
     lines = [f"Назва: {tenant.name}"]
@@ -115,7 +121,7 @@ def static_prompt(tenant: Tenant, master: bool = False) -> str:
         line = f"- {s.id}: {group}{s.title} — {s.duration} хв — {tenant.price_str(s.price)} — {names}."
         if s.description:
             line += f" {s.description}"
-        data.append(line)
+        data.append(line + _other_names(s, "title"))
     addons = [a for a in tenant.addons() if any(c.addon_id == a.id for c in tenant.services.values())]
     if addons:
         data += ["", "Додаткові послуги (клієнт додає їх сам кнопкою «➕» на картці підтвердження запису кнопками; "
@@ -135,7 +141,7 @@ def static_prompt(tenant: Tenant, master: bool = False) -> str:
         line = f"- {m.id}: {m.name} — {schedule}."
         if m.about:
             line += f" {m.about}"
-        data.append(line)
+        data.append(line + _other_names(m, "name"))
 
     lead = tenant.min_lead_min
     lead_text = f"{lead // 60} год" if lead and lead % 60 == 0 else f"{lead} хв"

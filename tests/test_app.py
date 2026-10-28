@@ -93,6 +93,13 @@ class ClientButtonsTests(BotTestCase):
         await self.send(msg(text="📅 Időpontfoglalás", lang="hu"))
         self.assertEqual(self.tg.last(CLIENT_ID)["text"], "Válasszon szolgáltatást:")
 
+    async def test_menu_in_german(self):
+        await self.send(msg(text="/start", lang="de"))
+        kb = self.tg.last(CLIENT_ID)["reply_markup"]["keyboard"]
+        self.assertEqual(kb[0][0]["text"], "📅 Termin buchen")
+        await self.send(msg(text="📅 Termin buchen", lang="de"))
+        self.assertEqual(self.tg.last(CLIENT_ID)["text"], "Wählen Sie eine Leistung:")
+
     async def test_full_booking_with_contact(self):
         await self.send(msg(text="📅 Записатися"))
         services = self.tg.last(CLIENT_ID)

@@ -77,7 +77,7 @@ class Scheduler:
             if b["tg_id"] > 0 and not b["blocked"]:
                 lang = b["lang"] or tenant.lang
                 await app.send(tenant, b["tg_id"], tenant.t(
-                    lang, "client_cancelled_unpaid", service=b["service_title"], master=b["master_name"],
+                    lang, "client_cancelled_unpaid", **tenant.booking_names(b, lang),
                     day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
             await app.notify_master(tenant, b, "mst_cancelled")
             client = db.get_client(b["client_id"])
@@ -143,8 +143,9 @@ class Scheduler:
             master = b["master_id"] if b["master_id"] in tenant.masters else "any"
             kb = inline_kb([[ibtn(tenant.t(lang, "btn_book_again"), f"nb:{b['service_id']}:{master}")],
                             [ibtn(tenant.t(lang, "btn_no_nudges"), "noff")]])
-            sent = await app.send(tenant, b["tg_id"], tenant.t(lang, "nudge", name=name, weeks=weeks,
-                                                               service=b["service_title"]), kb)
+            sent = await app.send(tenant, b["tg_id"], tenant.t(
+                lang, "nudge", name=name, weeks=weeks,
+                service=tenant.service_title(b["service_id"], lang, b["service_title"])), kb)
             if sent:
                 db.log_event(slug, b["client_id"], "nudge_sent", now, {"id": b["id"]})
 

@@ -26,7 +26,7 @@ from .stats import compute_stats
 from .telegram import NetworkError, TelegramAPI, TelegramError, chunk_text, ibtn, inline_kb, reply_kb, url_btn
 from .texts import Raw
 from .util import is_affirmative, normalize_phone, short
-from .ui import Expired, _d, _int, _rows, _t
+from .ui import Expired, _d, _int, _opt, _rows, _t
 
 log = logging.getLogger("barberbot")
 
@@ -656,8 +656,9 @@ class BotApp(AdminPanel, MasterPanel):
             return
         start: datetime = effect["start"]
         data = f"ac:{service.id}:{master.id}:{start:%Y%m%d}:{start:%H%M}"
-        text = ctx.t("card", service=service.title, master=master.name, day=tenant.day_label(start.date(), ctx.lang),
-                     time=fmt_hhmm(start), duration=service.duration, price=tenant.price_str(service.price))
+        text = ctx.t("card", service=service.tr("title", ctx.lang), master=master.tr("name", ctx.lang),
+                     day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start), duration=service.duration,
+                     price=tenant.price_str(service.price))
         kb = inline_kb([[ibtn(ctx.t("btn_confirm"), data)], [ibtn(ctx.t("btn_no_change"), "pn")]])
         sent = await ctx.send(text, kb)
         self.pending[(tenant.slug, ctx.client_id)] = (data, tenant.now() + PENDING_TTL,
@@ -765,7 +766,7 @@ class BotApp(AdminPanel, MasterPanel):
             return
         text = (msg.get("text") or "").strip()
         lang = client["lang"] or tenant.lang
-        title = tenant.info.get("admin_title") or tenant.t(lang, "admin_title")
+        title = tenant.info_in("admin_title", lang) or tenant.t(lang, "admin_title")
         try:
             if text:
                 await ctx.api.call("sendMessage", chat_id=client["tg_id"], parse_mode="HTML",
@@ -899,34 +900,36 @@ class BotApp(AdminPanel, MasterPanel):
         master = ctx.tenant.masters.get(master_sel)
         if master is None:
             raise Expired()
-        return master.name
+        return master.tr("name", ctx.lang)
 
     # Вибір послуги: якщо в закладі кілька розділів (group), спершу розділ, потім послуги лише з нього.
     # prefix — callback вибору послуги ("bs" / "aBs"), group_prefix — вибору розділу ("bg" / "aBg").
-    def _service_buttons(self, ctx: Ctx, services, prefix: str) -> list[list[dict]]:
+    # lang — мова назв послуг: клієнту його мовою, адміну — основною мовою закладу.
+    def _service_buttons(self, ctx: Ctx, services, prefix: str, lang: str) -> list[list[dict]]:
         tenant = ctx.tenant
-        return [[ibtn(ctx.t("btn_service", title=s.label, price=tenant.price_str(s.price)), f"{prefix}:{s.id}")]
-                for s in services]
+        return [[ibtn(ctx.t("btn_service", title=s.label_in(lang), price=tenant.price_str(s.price)),
+                      f"{prefix}:{s.id}")] for s in services]
 
     @staticmethod
     def _has_groups(groups) -> bool:
         return sum(1 for g, _ in groups if g) > 1
 
-    def service_menu(self, ctx: Ctx, prefix: str, group_prefix: str) -> tuple[bool, list[list[dict]]]:
+    def service_menu(self, ctx: Ctx, prefix: str, group_prefix: str, lang: str) -> tuple[bool, list[list[dict]]]:
         """Перший екран: (чи це розділи, кнопки). Без розділів — одразу всі послуги."""
         groups = ctx.tenant.service_groups()
         if not self._has_groups(groups):
-            return False, self._service_buttons(ctx, [s for _, ss in groups for s in ss], prefix)
-        rows = [[ibtn(g, f"{group_prefix}:{i}")] for i, (g, _) in enumerate(groups) if g]
-        return True, rows + self._service_buttons(ctx, [s for g, ss in groups if not g for s in ss], prefix)
+            return False, self._service_buttons(ctx, [s for _, ss in groups for s in ss], prefix, lang)
+        rows = [[ibtn(ss[0].tr("group", lang), f"{group_prefix}:{i}")] for i, (g, ss) in enumerate(groups) if g]
+        return True, rows + self._service_buttons(ctx, [s for g, ss in groups if not g for s in ss], prefix, lang)
 
-    def group_menu(self, ctx: Ctx, index: int, prefix: str, back: str) -> tuple[str, list[list[dict]]]:
+    def group_menu(self, ctx: Ctx, index: int, prefix: str, back: str, lang: str) -> tuple[str, list[list[dict]]]:
         """Розділ: (назва, кнопки послуг + «Назад»)."""
         groups = ctx.tenant.service_groups()
         if not 0 <= index < len(groups) or not groups[index][0]:
             raise Expired()
-        group, services = groups[index]
-        return group, self._service_buttons(ctx, services, prefix) + [[ibtn(ctx.t("btn_back"), back)]]
+        _, services = groups[index]
+        return (services[0].tr("group", lang),
+                self._service_buttons(ctx, services, prefix, lang) + [[ibtn(ctx.t("btn_back"), back)]])
 
     def _group_back(self, ctx: Ctx, service_id: str, menu: str, group_prefix: str) -> str:
         """«Назад» від послуги: до її розділу, якщо розділи є, інакше — до списку послуг."""
@@ -940,11 +943,11 @@ class BotApp(AdminPanel, MasterPanel):
     async def flow_services(self, ctx: Ctx, message_id: int | None) -> None:
         # Текст над кнопками — одне довге речення: у Telegram кнопки такої ж ширини, як повідомлення над ними,
         # і з коротким текстом їхні підписи обрізаються.
-        grouped, rows = self.service_menu(ctx, "bs", "bg")
+        grouped, rows = self.service_menu(ctx, "bs", "bg", ctx.lang)
         await ctx.show(message_id, ctx.t("choose_group" if grouped else "choose_service"), inline_kb(rows))
 
     async def flow_group(self, ctx: Ctx, index: int, message_id: int | None) -> None:
-        group, rows = self.group_menu(ctx, index, "bs", "bs")
+        group, rows = self.group_menu(ctx, index, "bs", "bs", ctx.lang)
         await ctx.show(message_id, ctx.t("choose_service_in_group", group=group), inline_kb(rows))
 
     async def flow_masters(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
@@ -953,13 +956,15 @@ class BotApp(AdminPanel, MasterPanel):
         if len(masters) == 1:
             await self.flow_days(ctx, service_id, masters[0].id, message_id)
             return
-        rows = _rows([ibtn(m.name, f"bm:{service_id}:{m.id}") for m in masters], 2)
+        rows = _rows([ibtn(m.tr("name", ctx.lang), f"bm:{service_id}:{m.id}") for m in masters], 2)
         rows.append([ibtn(ctx.t("btn_any_master"), f"bm:{service_id}:any")])
         rows.append([ibtn(ctx.t("btn_back"), self._group_back(ctx, service_id, "bs", "bg"))])
+        description = service.tr("description", ctx.lang)
         await ctx.show(message_id, ctx.t(
-            "choose_master", service=service.title, price=ctx.tenant.price_str(service.price), duration=service.duration,
-            description=Raw(ctx.t("master_service_desc", description=service.description)) if service.description
-            else ""), inline_kb(rows))
+            "choose_master", service=service.tr("title", ctx.lang), price=ctx.tenant.price_str(service.price),
+            duration=service.duration,
+            description=Raw(ctx.t("master_service_desc", description=description)) if description else ""),
+            inline_kb(rows))
 
     def _back_to_masters(self, ctx: Ctx, service_id: str) -> str:
         if len(ctx.tenant.masters_for(service_id)) <= 1:
@@ -976,11 +981,13 @@ class BotApp(AdminPanel, MasterPanel):
             raise Expired() from None
         back = [ibtn(ctx.t("btn_back"), self._back_to_masters(ctx, service_id))]
         if not days:
-            text = ctx.t("no_days", service=service.title, master=master_label, days=ctx.tenant.days_ahead)
+            text = ctx.t("no_days", service=service.tr("title", ctx.lang), master=master_label,
+                         days=ctx.tenant.days_ahead)
             await ctx.show(message_id, text, inline_kb([back]))
             return
         buttons = [ibtn(ctx.tenant.day_button(d, ctx.lang), f"bd:{service_id}:{master_sel}:{d:%Y%m%d}") for d in days]
-        text = (prefix + "\n\n" if prefix else "") + ctx.t("choose_day", service=service.title, master=master_label)
+        text = (prefix + "\n\n" if prefix else "") + ctx.t("choose_day", service=service.tr("title", ctx.lang),
+                                                           master=master_label)
         await ctx.show(message_id, text, inline_kb(_rows(buttons, 3) + [back]))
 
     async def flow_times(self, ctx: Ctx, service_id: str, master_sel: str, day: date, message_id: int | None,
@@ -998,8 +1005,8 @@ class BotApp(AdminPanel, MasterPanel):
             return
         buttons = [ibtn(t, f"bt:{service_id}:{master_sel}:{day:%Y%m%d}:{t.replace(':', '')}") for t in slots]
         rows = _rows(buttons, 4) + [[ibtn(ctx.t("btn_back"), f"bm:{service_id}:{master_sel}")]]
-        text = (prefix + "\n\n" if prefix else "") + ctx.t("choose_time", service=service.title, master=master_label,
-                                                           day=day_label)
+        text = (prefix + "\n\n" if prefix else "") + ctx.t("choose_time", service=service.tr("title", ctx.lang),
+                                                           master=master_label, day=day_label)
         await ctx.show(message_id, text, inline_kb(rows))
 
     async def flow_card(self, ctx: Ctx, service_id: str, master_sel: str, start: datetime,
@@ -1015,12 +1022,13 @@ class BotApp(AdminPanel, MasterPanel):
             await self.flow_times(ctx, service_id, master_sel, start.date(), message_id, prefix=ctx.t("slot_taken"))
             return
         master = tenant.masters[resolved]
-        text = ctx.t("card", service=service.title, master=master.name, day=tenant.day_label(start.date(), ctx.lang),
-                     time=fmt_hhmm(start), duration=service.duration, price=tenant.price_str(service.price))
+        text = ctx.t("card", service=service.tr("title", ctx.lang), master=master.tr("name", ctx.lang),
+                     day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start), duration=service.duration,
+                     price=tenant.price_str(service.price))
         rows = [[ibtn(ctx.t("btn_confirm"), f"bc:{service_id}:{resolved}:{start:%Y%m%d}:{start:%H%M}")]]
         for combo in tenant.addons_for(service_id, resolved):
             addon = tenant.services[combo.addon_id]
-            label = ctx.t("btn_add_addon", title=addon.label, duration=addon.duration,
+            label = ctx.t("btn_add_addon", title=addon.label_in(ctx.lang), duration=addon.duration,
                           price=tenant.price_str(addon.price))
             rows.append([ibtn(label, f"ba:{combo.id}:{resolved}:{start:%Y%m%d}:{start:%H%M}")])
         rows.append([ibtn(ctx.t("btn_other_time"), f"bd:{service_id}:{master_sel}:{start:%Y%m%d}")])
@@ -1066,8 +1074,8 @@ class BotApp(AdminPanel, MasterPanel):
                 await ctx.show(message_id, ctx.t("booking_error"))
             return
         self.pending.pop(key, None)
-        address = tenant.info.get("address")
-        text = ctx.t("booked", service=b["service_title"], master=b["master_name"],
+        address = tenant.info_in("address", ctx.lang)
+        text = ctx.t("booked", **tenant.booking_names(b, ctx.lang),
                      day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start),
                      price=tenant.price_str(b["price"]),
                      address=Raw(ctx.t("booked_address", address=address)) if address else "")
@@ -1148,7 +1156,7 @@ class BotApp(AdminPanel, MasterPanel):
         for b in rows:
             start = parse_dt(b["start_at"])
             text += ctx.t("my_item", day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start),
-                          service=b["service_title"], master=b["master_name"])
+                          **tenant.booking_names(b, ctx.lang))
             label = f"{start:%d.%m} {fmt_hhmm(start)}"
             if b["prepay"]:
                 text += ctx.t(f"my_prepay_{b['prepay']}", amount=tenant.price_str(tenant.prepay_amount),
@@ -1167,31 +1175,34 @@ class BotApp(AdminPanel, MasterPanel):
         groups = tenant.service_groups()
         for group, services in groups:
             if group and len(groups) > 1:
-                text += ctx.t("price_group", group=group)
+                text += ctx.t("price_group", group=services[0].tr("group", ctx.lang))
             for s in services:
-                text += ctx.t("price_item", title=s.label, price=tenant.price_str(s.price), duration=s.duration)
+                text += ctx.t("price_item", title=s.label_in(ctx.lang), price=tenant.price_str(s.price),
+                              duration=s.duration)
                 if s.description:
-                    text += ctx.t("price_desc", description=s.description)
+                    text += ctx.t("price_desc", description=s.tr("description", ctx.lang))
         addons = [a for a in tenant.addons() if any(c.addon_id == a.id for c in tenant.services.values())]
         if addons:
             text += ctx.t("prices_addons_header")
             for a in addons:
-                text += ctx.t("price_addon_item", title=a.label, price=tenant.price_str(a.price), duration=a.duration)
+                text += ctx.t("price_addon_item", title=a.label_in(ctx.lang), price=tenant.price_str(a.price),
+                              duration=a.duration)
         await ctx.send(text, inline_kb([[ibtn(ctx.t("btn_book"), "menu:book")]]))
 
     async def show_contacts(self, ctx: Ctx) -> None:
         tenant = ctx.tenant
         info = tenant.info
         text = ctx.t("contacts_header", name=tenant.name)
+        lang = ctx.lang
         if info.get("address"):
-            text += ctx.t("contacts_address", address=info["address"])
+            text += ctx.t("contacts_address", address=tenant.info_in("address", lang))
         if info.get("phone"):
             text += ctx.t("contacts_phone", phone=info["phone"])
-        text += ctx.t("contacts_hours", hours=info.get("hours") or tenant.schedule_summary(ctx.lang))
+        text += ctx.t("contacts_hours", hours=tenant.info_in("hours", lang) or tenant.schedule_summary(lang))
         if info.get("directions"):
-            text += ctx.t("contacts_directions", directions=info["directions"])
+            text += ctx.t("contacts_directions", directions=tenant.info_in("directions", lang))
         if info.get("payment"):
-            text += ctx.t("contacts_payment", payment=info["payment"])
+            text += ctx.t("contacts_payment", payment=tenant.info_in("payment", lang))
         if tenant.prepay_enabled:
             text += ctx.t("contacts_prepay", amount=tenant.price_str(tenant.prepay_amount), hours=tenant.prepay_hours)
         if tenant.masters:
@@ -1207,14 +1218,15 @@ class BotApp(AdminPanel, MasterPanel):
     def _master_card(self, ctx: Ctx, master) -> str:
         """Майстер у «Контактах»: ім'я, легенда (about) і графік."""
         schedule = ctx.tenant.schedule_summary(ctx.lang, master).replace("\n", "; ")
-        return ctx.t("contacts_master", name=master.name,
-                     about=Raw(ctx.t("contacts_master_about", about=master.about)) if master.about else "",
+        about = master.tr("about", ctx.lang)
+        return ctx.t("contacts_master", name=master.tr("name", ctx.lang),
+                     about=Raw(ctx.t("contacts_master_about", about=about)) if about else "",
                      schedule=schedule)
 
     # ---------------------------------------------------------------- скасування
     def _booking_texts(self, ctx: Ctx, b) -> dict:
         start = parse_dt(b["start_at"])
-        return {"service": b["service_title"], "master": b["master_name"],
+        return {**ctx.tenant.booking_names(b, ctx.lang),
                 "day": ctx.tenant.day_label(start.date(), ctx.lang), "time": fmt_hhmm(start)}
 
     async def send_cancel_card(self, ctx: Ctx, booking_id: int, message_id: int | None, from_ai: bool = False) -> None:
@@ -1307,12 +1319,12 @@ class BotApp(AdminPanel, MasterPanel):
         old = f"{tenant.day_label(old_start.date(), ctx.lang)}, {fmt_hhmm(old_start)}"
         new = f"{tenant.day_label(start.date(), ctx.lang)}, {fmt_hhmm(start)}"
         if master_id != b["master_id"]:
-            new += f" · {master.name}"
+            new += f" · {master.tr('name', ctx.lang)}"
         data = f"ry:{b['id']}:{start:%Y%m%d}:{start:%H%M}:{master_id}"
         second = ibtn(ctx.t("btn_no_change"), "rn") if from_ai else \
             ibtn(ctx.t("btn_other_time"), f"rt:{b['id']}:{start:%Y%m%d}")
         kb = inline_kb([[ibtn(ctx.t("btn_confirm_resched"), data)], [second]])
-        shown = await ctx.show(message_id, ctx.t("resched_card", service=b["service_title"], master=b["master_name"],
+        shown = await ctx.show(message_id, ctx.t("resched_card", **tenant.booking_names(b, ctx.lang),
                                                  old=old, new=new), kb)
         if from_ai:
             self.pending[(tenant.slug, ctx.client_id)] = (data, tenant.now() + PENDING_TTL, shown)
@@ -1339,7 +1351,7 @@ class BotApp(AdminPanel, MasterPanel):
         except BookingError as e:
             await self.resched_error(ctx, e, booking_id, start.date(), message_id)
             return
-        await ctx.show(message_id, ctx.t("rescheduled", service=new["service_title"], master=new["master_name"],
+        await ctx.show(message_id, ctx.t("rescheduled", **tenant.booking_names(new, ctx.lang),
                                          day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start)))
         old_start = parse_dt(old["start_at"])
         add_note(ctx.db, tenant, ctx.client_id, f"Запис №{new['id']} перенесено на {start:%d.%m.%Y} о "
@@ -1354,9 +1366,9 @@ class BotApp(AdminPanel, MasterPanel):
     # ---------------------------------------------------------------- нагадування
     def reminder_text(self, tenant: Tenant, b, lang: str, confirmed: bool = False) -> str:
         start = parse_dt(b["start_at"])
-        address = tenant.info.get("address")
+        address = tenant.info_in("address", lang)
         text = tenant.t(lang, "reminder", day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start),
-                        service=b["service_title"], master=b["master_name"],
+                        **tenant.booking_names(b, lang),
                         address=Raw(tenant.t(lang, "booked_address", address=address)) if address else "")
         if confirmed:
             text += tenant.t(lang, "will_come_ok")
@@ -1564,12 +1576,12 @@ class BotApp(AdminPanel, MasterPanel):
         return master
 
     async def admin_book_services(self, ctx: Ctx, message_id: int | None) -> None:
-        grouped, rows = self.service_menu(ctx, "aBs", "aBg")
+        grouped, rows = self.service_menu(ctx, "aBs", "aBg", ctx.tenant.lang)
         rows.append([ibtn(ctx.at("btn_adm_book_cancel"), "aBx")])
         await ctx.show(message_id, ctx.at("adm_book_group" if grouped else "adm_book_service"), inline_kb(rows))
 
     async def admin_book_group(self, ctx: Ctx, index: int, message_id: int | None) -> None:
-        group, rows = self.group_menu(ctx, index, "aBs", "aBs")
+        group, rows = self.group_menu(ctx, index, "aBs", "aBs", ctx.tenant.lang)
         await ctx.show(message_id, ctx.at("adm_book_in_group", group=group), inline_kb(rows))
 
     async def admin_book_masters(self, ctx: Ctx, service_id: str, message_id: int | None) -> None:
@@ -1722,7 +1734,7 @@ class BotApp(AdminPanel, MasterPanel):
         if client["tg_id"] > 0 and not client["blocked"]:
             lang = client["lang"] or tenant.lang
             notified = await self.send(tenant, client["tg_id"], tenant.t(
-                lang, "client_booked_by_admin", service=b["service_title"], master=b["master_name"],
+                lang, "client_booked_by_admin", **tenant.booking_names(b, lang),
                 day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start),
                 price=tenant.price_str(b["price"]))) is not None
             if notified:
@@ -1756,7 +1768,7 @@ class BotApp(AdminPanel, MasterPanel):
             await ctx.send(usage)
             return
         who = parts[0].lower()
-        if who in ("all", "*", "всі", "все", "mind"):
+        if who in ("all", "*", "всі", "все", "mind", "alle"):
             master_id = None
         elif who in tenant.masters:
             master_id = who
@@ -1868,14 +1880,20 @@ class BotApp(AdminPanel, MasterPanel):
             await self.admin_day(ctx, _d(a[0]), message_id, a[1])
         elif op == "aDp" and len(a) == 1:
             await self.admin_day_picker(ctx, a[0], message_id)
-        elif op == "aRs" and len(a) == 1:
-            await self.admin_resched_days(ctx, _int(a[0]), message_id)
-        elif op == "aRd" and len(a) == 2:
-            await self.admin_resched_times(ctx, _int(a[0]), _d(a[1]), message_id)
-        elif op == "aRt" and len(a) == 3:
-            await self.admin_resched_confirm(ctx, _int(a[0]), datetime.combine(_d(a[1]), _t(a[2])), message_id)
-        elif op == "aRy" and len(a) == 3:
-            await self.admin_resched_do(ctx, _int(a[0]), datetime.combine(_d(a[1]), _t(a[2])), message_id)
+        elif op == "aRs" and len(a) in (1, 2):
+            await self.admin_resched_days(ctx, _int(a[0]), message_id, new_master=_opt(a, 1))
+        elif op == "aRd" and len(a) in (2, 3):
+            await self.admin_resched_times(ctx, _int(a[0]), _d(a[1]), message_id, new_master=_opt(a, 2))
+        elif op == "aRt" and len(a) in (3, 4):
+            await self.admin_resched_confirm(ctx, _int(a[0]), datetime.combine(_d(a[1]), _t(a[2])), message_id,
+                                             _opt(a, 3))
+        elif op == "aRy" and len(a) in (3, 4):
+            await self.admin_resched_do(ctx, _int(a[0]), datetime.combine(_d(a[1]), _t(a[2])), message_id,
+                                        _opt(a, 3))
+        elif op == "aRm" and len(a) == 1:
+            await self.admin_change_master(ctx, _int(a[0]), message_id)
+        elif op == "aRM" and len(a) == 2:
+            await self.admin_change_master_pick(ctx, _int(a[0]), a[1], message_id)
         elif op == "aC" and len(a) == 1:
             await self.admin_client_card(ctx, _int(a[0]), None)
         elif op == "aCb" and len(a) == 1:
@@ -1903,7 +1921,7 @@ class BotApp(AdminPanel, MasterPanel):
                 lang = client["lang"] or tenant.lang
                 start = parse_dt(b["start_at"])
                 await self.send(tenant, client["tg_id"], tenant.t(
-                    lang, "client_cancelled_by_admin", service=b["service_title"], master=b["master_name"],
+                    lang, "client_cancelled_by_admin", **tenant.booking_names(b, lang),
                     day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
                 add_note(ctx.db, tenant, client["id"], f"Адміністратор скасував запис №{b['id']}.", self.settings)
         elif op == "aPy" and len(a) == 1:
@@ -1919,7 +1937,7 @@ class BotApp(AdminPanel, MasterPanel):
                 lang = client["lang"] or tenant.lang
                 start = parse_dt(b["start_at"])
                 await self.send(tenant, client["tg_id"], tenant.t(
-                    lang, "prepay_paid_client", service=b["service_title"], master=b["master_name"],
+                    lang, "prepay_paid_client", **tenant.booking_names(b, lang),
                     day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)))
                 add_note(ctx.db, tenant, client["id"], f"Адміністратор підтвердив передоплату за запис №{b['id']}.",
                          self.settings)

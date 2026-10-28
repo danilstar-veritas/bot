@@ -95,6 +95,8 @@ class AdminPanel:
         if b["status"] == "active" and start > tenant.now():
             rows.append([ibtn(ctx.at("btn_adm_resched"), f"aRs:{b['id']}"),
                          ibtn(ctx.at("btn_adm_cancel_short"), f"acx:{b['id']}")])
+            if self._other_masters(tenant, b):
+                rows.append([ibtn(ctx.at("btn_adm_change_master"), f"aRm:{b['id']}")])
         if b["status"] == "active" and start.date() <= tenant.today():
             rows.append([ibtn(ctx.at("btn_adm_noshow"), f"ans:{b['id']}")])
         if b["status"] == "active" and b["prepay"] in ("waiting", "claimed"):
@@ -107,52 +109,101 @@ class AdminPanel:
         await ctx.show(message_id, self.booking_card_text(tenant, b, client), inline_kb(rows))
 
     # ================================================================ перенесення
-    def _resched_target(self, ctx: Ctx, booking_id: int):
+    # new_master — id майстра, до якого переносять запис («👤 Змінити майстра»); None — той самий майстер.
+    # Він їде в кінці даних кнопок (aRs/aRd/aRt/aRy), щоб вибір не губився між екранами.
+    def _resched_target(self, ctx: Ctx, booking_id: int, new_master: str | None = None):
         b = self._admin_booking(ctx, booking_id)
         if b["status"] != "active" or parse_dt(b["start_at"]) <= ctx.tenant.now() \
                 or b["service_id"] not in ctx.tenant.services:
             raise Expired()
+        if new_master is not None:
+            m = ctx.tenant.masters.get(new_master)
+            if m is None or b["service_id"] not in m.services:
+                raise Expired()
+            return b, new_master
         master = b["master_id"] if b["master_id"] in ctx.tenant.masters else "any"
         return b, master
 
-    async def admin_resched_days(self, ctx: Ctx, booking_id: int, message_id: int | None, prefix: str = "") -> None:
+    def _other_masters(self, tenant, b) -> list:
+        return [m for m in tenant.masters_for(b["service_id"]) if m.id != b["master_id"]]
+
+    @staticmethod
+    def _m(new_master: str | None) -> str:
+        """Хвіст даних кнопки з новим майстром."""
+        return f":{new_master}" if new_master else ""
+
+    async def admin_change_master(self, ctx: Ctx, booking_id: int, message_id: int | None) -> None:
         tenant = ctx.tenant
-        b, master = self._resched_target(ctx, booking_id)
-        days = ctx.booking.available_days(b["service_id"], master, exclude_id=b["id"], admin=True)
+        b, _ = self._resched_target(ctx, booking_id)
         summary = Raw(self._booking_summary(tenant, b, ctx.db.get_client(b["client_id"])))
         back = [ibtn(ctx.at("btn_back"), f"aKe:{b['id']}")]
-        if not days:
-            await ctx.show(message_id, ctx.at("adm_resched_none", summary=summary), inline_kb([back]))
+        others = self._other_masters(tenant, b)
+        if not others:
+            await ctx.show(message_id, ctx.at("adm_change_master_none", service=b["service_title"]), inline_kb([back]))
             return
-        buttons = [ibtn(tenant.day_button(d, tenant.lang), f"aRd:{b['id']}:{d:%Y%m%d}") for d in days]
+        buttons = [ibtn(ctx.at("btn_adm_master_pick", name=m.name), f"aRM:{b['id']}:{m.id}") for m in others]
+        await ctx.show(message_id, ctx.at("adm_change_master", id=b["id"], summary=summary),
+                       inline_kb(_rows(buttons, 2) + [back]))
+
+    async def admin_change_master_pick(self, ctx: Ctx, booking_id: int, new_master: str,
+                                       message_id: int | None) -> None:
+        """Новий майстер вільний у той самий час — одразу підтвердження; інакше — вибір дня."""
+        tenant = ctx.tenant
+        b, _ = self._resched_target(ctx, booking_id, new_master)
+        start = parse_dt(b["start_at"])
+        if fmt_hhmm(start) in ctx.booking.free_slots(b["service_id"], new_master, start.date(), exclude_id=b["id"],
+                                                     admin=True):
+            await self.admin_resched_confirm(ctx, booking_id, start, message_id, new_master)
+            return
+        await self.admin_resched_days(ctx, booking_id, message_id, prefix=ctx.at(
+            "adm_master_busy", master=tenant.masters[new_master].name, time=fmt_hhmm(start)), new_master=new_master)
+
+    async def admin_resched_days(self, ctx: Ctx, booking_id: int, message_id: int | None, prefix: str = "",
+                                 new_master: str | None = None) -> None:
+        tenant = ctx.tenant
+        b, master = self._resched_target(ctx, booking_id, new_master)
+        days = ctx.booking.available_days(b["service_id"], master, exclude_id=b["id"], admin=True)
+        summary = Raw(self._booking_summary(tenant, b, ctx.db.get_client(b["client_id"])))
+        back = [ibtn(ctx.at("btn_back"), f"aRm:{b['id']}" if new_master else f"aKe:{b['id']}")]
+        if new_master and not prefix:
+            prefix = ctx.at("adm_new_master", master=tenant.masters[new_master].name)
+        if not days:
+            await ctx.show(message_id, (prefix + "\n\n" if prefix else "") + ctx.at("adm_resched_none", summary=summary),
+                           inline_kb([back]))
+            return
+        buttons = [ibtn(tenant.day_button(d, tenant.lang), f"aRd:{b['id']}:{d:%Y%m%d}{self._m(new_master)}")
+                   for d in days]
         text = (prefix + "\n\n" if prefix else "") + ctx.at("adm_resched_day", id=b["id"], summary=summary)
         await ctx.show(message_id, text, inline_kb(_rows(buttons, 3) + [back]))
 
     async def admin_resched_times(self, ctx: Ctx, booking_id: int, day: date, message_id: int | None,
-                                  prefix: str = "") -> None:
+                                  prefix: str = "", new_master: str | None = None) -> None:
         tenant = ctx.tenant
-        b, master = self._resched_target(ctx, booking_id)
+        b, master = self._resched_target(ctx, booking_id, new_master)
         slots = ctx.booking.free_slots(b["service_id"], master, day, exclude_id=b["id"], admin=True)
         if not slots:
-            await self.admin_resched_days(ctx, booking_id, message_id,
+            await self.admin_resched_days(ctx, booking_id, message_id, new_master=new_master,
                                           prefix=ctx.at("no_times", day=tenant.day_label(day, tenant.lang)))
             return
-        buttons = [ibtn(t, f"aRt:{b['id']}:{day:%Y%m%d}:{t.replace(':', '')}") for t in slots]
+        m = self._m(new_master)
+        buttons = [ibtn(t, f"aRt:{b['id']}:{day:%Y%m%d}:{t.replace(':', '')}{m}") for t in slots]
         text = (prefix + "\n\n" if prefix else "") + ctx.at(
-            "adm_resched_time", id=b["id"], service=b["service_title"], master=b["master_name"],
+            "adm_resched_time", id=b["id"], service=b["service_title"],
+            master=tenant.masters[new_master].name if new_master else b["master_name"],
             day=tenant.day_label(day, tenant.lang))
-        await ctx.show(message_id, text, inline_kb(_rows(buttons, 4) + [[ibtn(ctx.at("btn_back"), f"aRs:{b['id']}")]]))
+        await ctx.show(message_id, text, inline_kb(_rows(buttons, 4) + [[ibtn(ctx.at("btn_back"), f"aRs:{b['id']}{m}")]]))
 
     def _when_full(self, tenant, start: datetime, master: str) -> str:
         return f"{tenant.day_label(start.date(), tenant.lang)}, {fmt_hhmm(start)} · {master}"
 
-    async def admin_resched_confirm(self, ctx: Ctx, booking_id: int, start: datetime, message_id: int | None) -> None:
+    async def admin_resched_confirm(self, ctx: Ctx, booking_id: int, start: datetime, message_id: int | None,
+                                    new_master: str | None = None) -> None:
         tenant = ctx.tenant
-        b, master = self._resched_target(ctx, booking_id)
+        b, master = self._resched_target(ctx, booking_id, new_master)
         try:
             _, resolved = ctx.booking.validate_reschedule(b["id"], start, master, None, admin=True)
         except BookingError as e:
-            await self._resched_failed(ctx, e, b["id"], start.date(), message_id)
+            await self._resched_failed(ctx, e, b["id"], start.date(), message_id, new_master)
             return
         client = ctx.db.get_client(b["client_id"])
         offline = client is None or client["tg_id"] < 0
@@ -160,27 +211,29 @@ class AdminPanel:
                       if client else "", old=self._when_full(tenant, parse_dt(b["start_at"]), b["master_name"]),
                       new=self._when_full(tenant, start, tenant.masters[resolved].name),
                       who=Raw(ctx.at("adm_cancel_offline" if offline else "adm_cancel_notify")))
-        when = f"{start:%Y%m%d}:{start:%H%M}"
+        when = f"{start:%Y%m%d}:{start:%H%M}{self._m(new_master)}"
         kb = inline_kb([[ibtn(ctx.at("btn_adm_resched_yes"), f"aRy:{b['id']}:{when}")],
-                        [ibtn(ctx.at("btn_other_time"), f"aRd:{b['id']}:{start:%Y%m%d}")]])
+                        [ibtn(ctx.at("btn_other_time"), f"aRd:{b['id']}:{start:%Y%m%d}{self._m(new_master)}")]])
         await ctx.show(message_id, text, kb)
 
     async def _resched_failed(self, ctx: Ctx, e: BookingError, booking_id: int, day: date,
-                              message_id: int | None) -> None:
+                              message_id: int | None, new_master: str | None = None) -> None:
         if e.code == "same_time":
             await ctx.show(message_id, ctx.at("adm_resched_same"))
-        elif e.code in ("inactive", "not_found", "no_service"):
+        elif e.code in ("inactive", "not_found", "no_service", "master_no_service"):
             raise Expired()
         else:
-            await self.admin_resched_times(ctx, booking_id, day, message_id, prefix=ctx.at("slot_taken"))
+            await self.admin_resched_times(ctx, booking_id, day, message_id, prefix=ctx.at("slot_taken"),
+                                           new_master=new_master)
 
-    async def admin_resched_do(self, ctx: Ctx, booking_id: int, start: datetime, message_id: int | None) -> None:
+    async def admin_resched_do(self, ctx: Ctx, booking_id: int, start: datetime, message_id: int | None,
+                               new_master: str | None = None) -> None:
         tenant = ctx.tenant
-        b, master = self._resched_target(ctx, booking_id)
+        b, master = self._resched_target(ctx, booking_id, new_master)
         try:
             old, new = ctx.booking.reschedule(b["id"], start, master, None, admin=True)
         except BookingError as e:
-            await self._resched_failed(ctx, e, b["id"], start.date(), message_id)
+            await self._resched_failed(ctx, e, b["id"], start.date(), message_id, new_master)
             return
         client = ctx.db.get_client(new["client_id"])
         offline = client is None or client["tg_id"] < 0
@@ -191,10 +244,14 @@ class AdminPanel:
         await self.notify_master_resched(tenant, old, new)
         if client and not offline and not client["blocked"]:
             lang = client["lang"] or tenant.lang
+            moved = old["master_id"] != new["master_id"]
+            names = tenant.booking_names(new, lang)
             await self.send(tenant, client["tg_id"], tenant.t(
-                lang, "client_rescheduled_by_admin", service=new["service_title"], master=new["master_name"],
-                old=f"{tenant.day_label(parse_dt(old['start_at']).date(), lang)}, {old['start_at'][11:16]}",
-                new=f"{tenant.day_label(start.date(), lang)}, {fmt_hhmm(start)}"))
+                lang, "client_rescheduled_by_admin", **names,
+                old=f"{tenant.day_label(parse_dt(old['start_at']).date(), lang)}, {old['start_at'][11:16]}"
+                    + (f" · {tenant.booking_names(old, lang)['master']}" if moved else ""),
+                new=f"{tenant.day_label(start.date(), lang)}, {fmt_hhmm(start)}"
+                    + (f" · {names['master']}" if moved else "")))
             add_note(ctx.db, tenant, client["id"], f"Адміністратор переніс запис №{new['id']} на "
                      f"{start:%d.%m.%Y} о {fmt_hhmm(start)} ({new['master_name']}).", self.settings)
 

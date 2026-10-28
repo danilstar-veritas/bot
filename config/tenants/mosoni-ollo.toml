@@ -1,6 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────
 #  Угорська версія закладу: «Mosoni Olló Stúdió», Мошонмадяровар.
-#  Усе (меню, послуги, майстри, ціни) — угорською. Правила формату — як у demo-barbershop.toml.
+#  Основна мова — угорська; клієнтам також українська, англійська й німецька (усе перекладено).
+#  Правила формату — як у demo-barbershop.toml.
 #  Щоб запустити: вставте токен нового бота від @BotFather і свій Telegram ID в admins.
 # ─────────────────────────────────────────────────────────────────────
 
@@ -15,18 +16,28 @@ tech_admins = []
 
 timezone = "Europe/Budapest"
 
-# Лише угорська: клієнти й повідомлення власнику — угорською.
-languages = ["hu"]
+# Угорська — основна (нею пишуться повідомлення власнику). Клієнт бачить усе мовою свого Telegram,
+# якщо вона є в списку; інші мови — англійською.
+languages = ["hu", "uk", "en", "de"]
 
 price_format = "{price} Ft"
 
 
 [info]
 address = "9200 Mosonmagyaróvár, Fő utca 12."
+address_uk = "Мошонмадяровар, вул. Фьо, 12 (9200 Mosonmagyaróvár, Fő utca 12.)"
+address_en = "Fő utca 12, 9200 Mosonmagyaróvár, Hungary"
+address_de = "Fő utca 12, 9200 Mosonmagyaróvár, Ungarn"
 phone = "+36 30 000 00 00"
 maps_url = "https://maps.google.com/?q=Fő+utca+12+Mosonmagyaróvár"
 directions = "A bejárat az udvar felől van, mellette ingyenes parkoló található."
+directions_uk = "Вхід з двору, поруч безкоштовна парковка."
+directions_en = "The entrance is from the courtyard, with free parking right next to it."
+directions_de = "Der Eingang ist im Hof, direkt daneben gibt es kostenlose Parkplätze."
 payment = "Készpénz, bankkártya, Apple Pay / Google Pay."
+payment_uk = "Готівка, банківська картка, Apple Pay / Google Pay."
+payment_en = "Cash, bank card, Apple Pay / Google Pay."
+payment_de = "Bargeld, Bankkarte, Apple Pay / Google Pay."
 hours = ""
 extra = """
 Amíg vár: kávé, tea és PlayStation ingyen.
@@ -82,7 +93,8 @@ handoff_pause_hours = 12
 max_messages_per_hour = 20
 max_messages_per_day = 60
 extra_instructions = """
-Ügyfelekkel magyarul beszélj, udvariasan, magázódva («Ön»), hacsak az ügyfél nem ír más nyelven.
+Ügyfelekkel magyarul beszélj, udvariasan, magázódva («Ön»), hacsak az ügyfél nem ír más nyelven —
+ukránul, angolul vagy németül az ügyfél nyelvén válaszolj, udvariasan (németül «Sie»).
 """
 
 
@@ -97,20 +109,34 @@ sun = "off"
 
 
 # ── Szolgáltatások ───────────────────────────────────────────────────
+# Переклади: title_uk / title_en / title_de (так само short_, description_, group_).
+# Клієнт бачить назви мовою свого Telegram; адмін і майстри — угорською.
 
 # ── 👨 Férfi
 [[services]]
 id = "haircut"
 title = "Férfi hajvágás"
+title_uk = "Чоловіча стрижка"
+title_en = "Men's haircut"
+title_de = "Herrenhaarschnitt"
 short = "Klasszikus hajvágás"
+short_uk = "Класична стрижка"
+short_en = "Classic haircut"
+short_de = "Klassischer Haarschnitt"
 icon = "✂️"
 duration = 60
 price = 5500
 group = "👨 Férfi"
+group_uk = "👨 Чоловічі"
+group_en = "👨 Men"
+group_de = "👨 Herren"
 
 [[services]]
 id = "beard"
 title = "Szakállformázás"
+title_uk = "Моделювання бороди"
+title_en = "Beard shaping"
+title_de = "Bartformung"
 icon = "🧔"
 duration = 30
 price = 3500
@@ -119,15 +145,24 @@ group = "👨 Férfi"
 [[services]]
 id = "combo"
 title = "Hajvágás + szakáll"
+title_uk = "Стрижка + борода"
+title_en = "Haircut + beard"
+title_de = "Haarschnitt + Bart"
 icon = "💈"
 duration = 90
 price = 8500
 description = "A legnépszerűbb: hajvágás, szakállformázás és meleg törölköző."
+description_uk = "Найпопулярніше: стрижка, оформлення бороди та гарячий рушник."
+description_en = "Most popular: haircut, beard shaping and a hot towel."
+description_de = "Am beliebtesten: Haarschnitt, Bartformung und ein heißes Handtuch."
 group = "👨 Férfi"
 
 [[services]]
 id = "buzz"
 title = "Gépi hajvágás"
+title_uk = "Стрижка машинкою"
+title_en = "Clipper cut"
+title_de = "Maschinenhaarschnitt"
 icon = "🪒"
 duration = 30
 price = 3500
@@ -137,55 +172,103 @@ group = "👨 Férfi"
 [[services]]
 id = "women_short"
 title = "Női hajvágás (rövid haj)"
+title_uk = "Жіноча стрижка (коротке волосся)"
+title_en = "Women's haircut (short hair)"
+title_de = "Damenhaarschnitt (kurzes Haar)"
 short = "Rövid haj"
+short_uk = "Коротке волосся"
+short_en = "Short hair"
+short_de = "Kurzes Haar"
 icon = "💇‍♀️"
 duration = 60
 price = 7000
 description = "Államig érő haj. A beszárítás az árban benne van."
+description_uk = "Волосся до підборіддя. Укладання входить у вартість."
+description_en = "Chin-length hair. Blow-dry included."
+description_de = "Kinnlanges Haar. Föhnen inklusive."
 group = "👩 Női"
+group_uk = "👩 Жіночі"
+group_en = "👩 Women"
+group_de = "👩 Damen"
 
 [[services]]
 id = "women_medium"
 title = "Női hajvágás (félhosszú haj)"
+title_uk = "Жіноча стрижка (середнє волосся)"
+title_en = "Women's haircut (medium hair)"
+title_de = "Damenhaarschnitt (mittellanges Haar)"
 short = "Félhosszú haj"
+short_uk = "Середнє волосся"
+short_en = "Medium hair"
+short_de = "Mittellanges Haar"
 icon = "💁‍♀️"
 duration = 90
 price = 8500
 description = "Vállig érő haj. A beszárítás az árban benne van."
+description_uk = "Волосся до плечей. Укладання входить у вартість."
+description_en = "Shoulder-length hair. Blow-dry included."
+description_de = "Schulterlanges Haar. Föhnen inklusive."
 group = "👩 Női"
 
 [[services]]
 id = "women_long"
 title = "Női hajvágás (hosszú haj)"
+title_uk = "Жіноча стрижка (довге волосся)"
+title_en = "Women's haircut (long hair)"
+title_de = "Damenhaarschnitt (langes Haar)"
 short = "Hosszú haj"
+short_uk = "Довге волосся"
+short_en = "Long hair"
+short_de = "Langes Haar"
 icon = "👸"
 duration = 90
 price = 9500
 description = "Vállon túl érő haj. A beszárítás az árban benne van."
+description_uk = "Волосся нижче плечей. Укладання входить у вартість."
+description_en = "Hair below the shoulders. Blow-dry included."
+description_de = "Haar über Schulterlänge. Föhnen inklusive."
 group = "👩 Női"
 
 [[services]]
 id = "pixie"
 title = "Női pixie / undercut vágás"
+title_uk = "Жіноча стрижка піксі / андеркат"
+title_en = "Women's pixie / undercut"
+title_de = "Damen-Pixie / Undercut"
 short = "Pixie / undercut"
+short_uk = "Піксі / андеркат"
+short_en = "Pixie / undercut"
+short_de = "Pixie / Undercut"
 icon = "⚡"
 duration = 60
 price = 7500
 description = "Rövid, formás vágás, igény szerint gépi kivágással."
+description_uk = "Коротка модельна стрижка, за бажанням з вистриганням машинкою."
+description_en = "A short shaped cut, with clipper work if you like."
+description_de = "Kurzer Formschnitt, auf Wunsch mit der Maschine."
 group = "👩 Női"
 
 [[services]]
 id = "trim_ends"
 title = "Hajvégek igazítása"
+title_uk = "Підрівнювання кінчиків"
+title_en = "Trimming the ends"
+title_de = "Spitzen schneiden"
 icon = "✨"
 duration = 30
 price = 4000
 description = "A forma frissítése a hossz megváltoztatása nélkül."
+description_uk = "Освіжити форму без зміни довжини."
+description_en = "Refresh the shape without changing the length."
+description_de = "Form auffrischen, ohne die Länge zu verändern."
 group = "👩 Női"
 
 [[services]]
 id = "bangs"
 title = "Frufru vágása"
+title_uk = "Стрижка чубчика"
+title_en = "Bangs trim"
+title_de = "Pony schneiden"
 icon = "🎀"
 duration = 30
 price = 2000
@@ -195,62 +278,107 @@ group = "👩 Női"
 [[services]]
 id = "kids_boy"
 title = "Kis úriember"
+title_uk = "Маленький джентльмен"
+title_en = "Little gentleman"
+title_de = "Kleiner Gentleman"
 icon = "👦"
 duration = 45
 price = 4000
 description = "Klasszikus, ollós hajvágás."
+description_uk = "Класична стрижка ножицями."
+description_en = "A classic scissor cut."
+description_de = "Klassischer Haarschnitt mit der Schere."
 group = "👦 Fiúk (8 éves korig)"
+group_uk = "👦 Хлопчики (до 8 років)"
+group_en = "👦 Boys (up to 8)"
+group_de = "👦 Jungen (bis 8 Jahre)"
 
 [[services]]
 id = "kids_buzz"
 title = "Kópé gépi vágással"
+title_uk = "Бешкетник під машинку"
+title_en = "Little rascal clipper cut"
+title_de = "Kleiner Racker mit der Maschine"
 icon = "🪒"
 duration = 30
 price = 2500
 description = "Gyorsan és szépen, géppel."
+description_uk = "Швидко й акуратно машинкою."
+description_en = "Quick and neat with clippers."
+description_de = "Schnell und ordentlich mit der Maschine."
 group = "👦 Fiúk (8 éves korig)"
 
 # ── 👧 Lányok (csak fodrásznők)
 [[services]]
 id = "kids_girl"
 title = "Kis hercegnő"
+title_uk = "Маленька принцеса"
+title_en = "Little princess"
+title_de = "Kleine Prinzessin"
 icon = "👧"
 duration = 45
 price = 4500
 description = "Rövid vagy félhosszú hajra."
+description_uk = "На коротке або середнє волосся."
+description_en = "For short or medium hair."
+description_de = "Für kurzes oder mittellanges Haar."
 group = "👧 Lányok (8 éves korig)"
+group_uk = "👧 Дівчатка (до 8 років)"
+group_en = "👧 Girls (up to 8)"
+group_de = "👧 Mädchen (bis 8 Jahre)"
 
 [[services]]
 id = "kids_girl_long"
 title = "Hosszú hajú hercegnő"
+title_uk = "Довгокоса принцеса"
+title_en = "Long-haired princess"
+title_de = "Prinzessin mit langem Haar"
 icon = "👑"
 duration = 60
 price = 5500
 description = "Hosszú hajra."
+description_uk = "На довге волосся."
+description_en = "For long hair."
+description_de = "Für langes Haar."
 group = "👧 Lányok (8 éves korig)"
 
 [[services]]
 id = "kids_ends"
 title = "Hajvégek a hercegnőnek"
+title_uk = "Кінчики для принцеси"
+title_en = "Ends trim for a princess"
+title_de = "Spitzen für die Prinzessin"
 icon = "🌟"
 duration = 30
 price = 2500
 description = "A forma frissítése a hossz megváltoztatása nélkül."
+description_uk = "Освіжити форму без зміни довжини."
+description_en = "Refresh the shape without changing the length."
+description_de = "Form auffrischen, ohne die Länge zu verändern."
 group = "👧 Lányok (8 éves korig)"
 
 [[services]]
 id = "kids_bangs"
 title = "Frufru a hercegnőnek"
+title_uk = "Чубчик для принцеси"
+title_en = "Bangs for a princess"
+title_de = "Pony für die Prinzessin"
 icon = "🦋"
 duration = 30
 price = 1500
 description = "Szép, egyenes frufru."
+description_uk = "Рівненький акуратний чубчик."
+description_en = "Neat, straight bangs."
+description_de = "Ein schöner, gerader Pony."
 group = "👧 Lányok (8 éves korig)"
 
 # ── Kiegészítő (csak a foglalási kártyán a «➕» gombbal)
 [[services]]
 id = "wash"
 title = "Hajmosás"
+title_uk = "Миття голови"
+title_en = "Hair wash"
+title_de = "Haarwäsche"
 icon = "🚿"
 duration = 15
 price = 1500
@@ -260,18 +388,27 @@ addon_for = ["haircut", "combo", "buzz", "women_short", "women_medium", "women_l
 
 
 # ── Fodrászok ────────────────────────────────────────────────────────
+# name_uk — ім'я кирилицею для українських клієнтів; about_uk / about_en / about_de — легенда.
 
 [[masters]]
 id = "bence"
 name = "Bence"
+name_uk = "Бенце"
 services = ["haircut", "beard", "combo", "kids_boy", "kids_buzz", "buzz", "wash"]
 about = "Egyszer a Mosoni-Dunánál, csónakban ülve nyírta ki magát úgy, hogy egyetlen felesleges hajszálat sem vágott le. Azóta minden fade számára meditáció, a tökéletes átmenet pedig becsületbeli ügy. A kávé nála csak fekete, a zene csak bakelitről szól."
+about_uk = "Якось підстриг себе сам, сидячи в човні на Мошонському Дунаї, — і не зрізав жодної зайвої волосини. Відтоді кожен фейд для нього — медитація, а ідеальний перехід — справа честі. Кава — тільки чорна, музика — тільки з вінілу."
+about_en = "He once cut his own hair sitting in a boat on the Moson Danube — without losing a single extra hair. Since then every fade is meditation for him, and a perfect blend is a matter of honour. Coffee only black, music only on vinyl."
+about_de = "Einmal hat er sich in einem Boot auf der Mosoni-Donau selbst die Haare geschnitten — ohne ein einziges Haar zu viel. Seitdem ist jeder Fade für ihn Meditation und ein perfekter Übergang Ehrensache. Kaffee nur schwarz, Musik nur von Vinyl."
 
 [[masters]]
 id = "mate"
 name = "Máté"
+name_uk = "Мате"
 services = ["haircut", "beard", "combo", "kids_boy", "kids_buzz", "buzz", "wash"]
 about = "A szakállat külön művészeti ágnak tartja. Mondják, egyszer olyan egyenesre igazította egy vendég szakállát, hogy az rögtön elment útlevélképet csináltatni. Hétfőn nem dolgozik: ollót élez, és Krúdyt olvas újra."
+about_uk = "Вважає бороду окремим видом мистецтва. Кажуть, якось він так рівно підрівняв клієнту бороду, що той одразу пішов фотографуватися на паспорт. По понеділках не працює: гострить ножиці й перечитує Круді."
+about_en = "Considers the beard an art form of its own. They say he once trimmed a client's beard so straight that the client went right off to have a passport photo taken. He doesn't work on Mondays: he sharpens scissors and rereads Krúdy."
+about_de = "Hält den Bart für eine eigene Kunstform. Man erzählt, er habe einem Kunden den Bart einmal so gerade gestutzt, dass dieser sofort ein Passfoto machen ließ. Montags arbeitet er nicht: Er schärft Scheren und liest Krúdy."
   [masters.schedule]
   mon = "off"
   sun = "11:00-17:00"
@@ -280,16 +417,33 @@ about = "A szakállat külön művészeti ágnak tartja. Mondják, egyszer olyan
 [[masters]]
 id = "reka"
 name = "Réka"
+name_uk = "Река"
 services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_ends", "kids_bangs", "haircut", "buzz", "wash"]
 about = "Szobrásznak készült, de rájött, hogy a haj engedelmesebb a márványnál. Öt perc beszélgetés után tudja, melyik frizura tesz Önt boldogabbá — és eddig egyszer sem tévedett."
+about_uk = "Мріяла стати скульпторкою, але вирішила, що волосся слухняніше за мармур. За п'ять хвилин розмови розуміє, яка стрижка зробить вас щасливішими, — і поки жодного разу не помилилася."
+about_en = "She trained to be a sculptor but realised hair is more obedient than marble. After five minutes of conversation she knows which haircut will make you happier — and she hasn't been wrong yet."
+about_de = "Sie wollte Bildhauerin werden, merkte aber, dass Haare folgsamer sind als Marmor. Nach fünf Minuten Gespräch weiß sie, welche Frisur Sie glücklicher macht — und hat sich noch nie geirrt."
 
 [[masters]]
 id = "zsofi"
 name = "Zsófi"
+name_uk = "Жофі"
 services = ["women_short", "women_medium", "women_long", "pixie", "trim_ends", "bangs", "kids_boy", "kids_buzz", "kids_girl", "kids_girl_long", "kids_ends", "kids_bangs", "haircut", "buzz", "wash"]
 about = "A kis hercegnők és úriemberek főmágusa: a székében a gyerekek elfelejtik, hogy féltek a hajvágástól. A zsebében mindig van egy jutalommatrica, a tarsolyában pedig egy pontosan harminc perces mese."
+about_uk = "Головна чарівниця для маленьких принцес і джентльменів: у її кріслі діти забувають, що боялися стригтися. У кишені завжди є наліпка-нагорода, а в запасі — казка рівно на тридцять хвилин."
+about_en = "Chief wizard for little princesses and gentlemen: in her chair, kids forget they were ever afraid of haircuts. There's always a reward sticker in her pocket and a story exactly thirty minutes long up her sleeve."
+about_de = "Die Oberzauberin für kleine Prinzessinnen und Gentlemen: Auf ihrem Stuhl vergessen Kinder, dass sie Angst vorm Haareschneiden hatten. In der Tasche hat sie immer einen Belohnungssticker und auf Lager ein Märchen von genau dreißig Minuten."
 
 
 # ── Egyedi szövegek ──────────────────────────────────────────────────
 [texts.hu]
 my_footer = "\n\n☕ Már várjuk Önt! A kávét vagy teát mi álljuk, amíg pedig vár, játszhat egy parti PlayStationt 🎮\nA fodrásza már élezi az ollót ✂️😉\n\nHa változnak a tervei, helyezze át vagy mondja le a foglalást az alábbi gombokkal 👇"
+
+[texts.uk]
+my_footer = "\n\n☕ Ми вже чекаємо на вас! Кава чи чай — за наш рахунок, а поки чекаєте, можна зіграти партію в PlayStation 🎮\nВаш майстер уже гострить ножиці ✂️😉\n\nЯкщо плани змінились — перенесіть або скасуйте запис кнопками нижче 👇"
+
+[texts.en]
+my_footer = "\n\n☕ We're looking forward to seeing you! Coffee or tea is on us, and while you wait you can play a round of PlayStation 🎮\nYour stylist is already sharpening the scissors ✂️😉\n\nIf your plans change, reschedule or cancel with the buttons below 👇"
+
+[texts.de]
+my_footer = "\n\n☕ Wir freuen uns auf Sie! Kaffee oder Tee geht auf uns, und während Sie warten, können Sie eine Runde PlayStation spielen 🎮\nIhr Stylist schärft schon die Schere ✂️😉\n\nWenn sich Ihre Pläne ändern, verschieben oder stornieren Sie den Termin mit den Buttons unten 👇"

@@ -1,4 +1,4 @@
-"""Усі тексти бота чотирма мовами (uk, ru, en, hu).
+"""Усі тексти бота п'ятьма мовами (uk, ru, en, hu, de).
 
 Будь-який текст можна перевизначити для конкретного закладу в його файлі
 налаштувань, у розділі [texts.uk] / [texts.ru] / [texts.en].
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from html import escape
 
-SUPPORTED_LANGS = ("uk", "ru", "en", "hu")
+SUPPORTED_LANGS = ("uk", "ru", "en", "hu", "de")
 PLAIN_PREFIXES = ("btn_", "cmd_", "alert_")
 
 
@@ -25,6 +25,7 @@ WEEKDAYS_SHORT = {
     "ru": ["пн", "вт", "ср", "чт", "пт", "сб", "вс"],
     "en": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     "hu": ["H", "K", "Sze", "Cs", "P", "Szo", "V"],
+    "de": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
 }
 
 # Повні назви днів для системного промпту (промпт написаний українською).
@@ -253,6 +254,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_resched_confirm": "🔁 <b>Перенести запис?</b>\n\n💈 {service}\n👤 {client}\nБуло: {old}\nСтане: <b>{new}</b>\n\n{who}",
         "btn_adm_resched_yes": "✅ Перенести",
         "adm_resched_same": "Це той самий час — нічого не змінено.",
+        "btn_adm_change_master": "👤 Змінити майстра",
+        "btn_adm_master_pick": "💈 {name}",
+        "adm_change_master": "👤 <b>Інший майстер для запису #{id}</b>\n\n{summary}\n\nОберіть майстра 👇",
+        "adm_change_master_none": "👤 Послугу «{service}» більше ніхто з майстрів не робить.",
+        "adm_new_master": "👤 Новий майстер: <b>{master}</b>",
+        "adm_master_busy": "👤 Новий майстер: <b>{master}</b>\n⚠️ О {time} цей майстер зайнятий — оберіть інший день.",
         "adm_resched_done": "🔁 <b>Перенесено</b>\n\n{summary}\n\nБуло: {old}\n{who}",
         "adm_resched_notified": "Клієнта повідомлено.",
         "adm_resched_offline": "Клієнта немає в Telegram — повідомте його самі.",
@@ -703,6 +710,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_resched_confirm": "🔁 <b>Перенести запись?</b>\n\n💈 {service}\n👤 {client}\nБыло: {old}\nСтанет: <b>{new}</b>\n\n{who}",
         "btn_adm_resched_yes": "✅ Перенести",
         "adm_resched_same": "Это то же время — ничего не изменено.",
+        "btn_adm_change_master": "👤 Сменить мастера",
+        "btn_adm_master_pick": "💈 {name}",
+        "adm_change_master": "👤 <b>Другой мастер для записи #{id}</b>\n\n{summary}\n\nВыберите мастера 👇",
+        "adm_change_master_none": "👤 Услугу «{service}» больше никто из мастеров не делает.",
+        "adm_new_master": "👤 Новый мастер: <b>{master}</b>",
+        "adm_master_busy": "👤 Новый мастер: <b>{master}</b>\n⚠️ В {time} этот мастер занят — выберите другой день.",
         "adm_resched_done": "🔁 <b>Перенесено</b>\n\n{summary}\n\nБыло: {old}\n{who}",
         "adm_resched_notified": "Клиент уведомлён.",
         "adm_resched_offline": "Клиента нет в Telegram — сообщите ему сами.",
@@ -1151,6 +1164,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_resched_confirm": "🔁 <b>Reschedule this booking?</b>\n\n💈 {service}\n👤 {client}\nWas: {old}\nWill be: <b>{new}</b>\n\n{who}",
         "btn_adm_resched_yes": "✅ Reschedule",
         "adm_resched_same": "That's the same time — nothing changed.",
+        "btn_adm_change_master": "👤 Change master",
+        "btn_adm_master_pick": "💈 {name}",
+        "adm_change_master": "👤 <b>Another master for booking #{id}</b>\n\n{summary}\n\nChoose a master 👇",
+        "adm_change_master_none": "👤 No other master does «{service}».",
+        "adm_new_master": "👤 New master: <b>{master}</b>",
+        "adm_master_busy": "👤 New master: <b>{master}</b>\n⚠️ This master is busy at {time} — choose another day.",
         "adm_resched_done": "🔁 <b>Rescheduled</b>\n\n{summary}\n\nWas: {old}\n{who}",
         "adm_resched_notified": "The client has been notified.",
         "adm_resched_offline": "The client isn't on Telegram — let them know yourself.",
@@ -1607,6 +1626,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "adm_resched_confirm": "🔁 <b>Áthelyezi a foglalást?</b>\n\n💈 {service}\n👤 {client}\nEddig: {old}\nÚj időpont: <b>{new}</b>\n\n{who}",
         "btn_adm_resched_yes": "✅ Áthelyezés",
         "adm_resched_same": "Ugyanaz az időpont — nem történt változás.",
+        "btn_adm_change_master": "👤 Fodrász cseréje",
+        "btn_adm_master_pick": "💈 {name}",
+        "adm_change_master": "👤 <b>Másik fodrász a(z) #{id} foglaláshoz</b>\n\n{summary}\n\nVálasszon fodrászt 👇",
+        "adm_change_master_none": "👤 Ezt a szolgáltatást («{service}») más fodrász nem végzi.",
+        "adm_new_master": "👤 Új fodrász: <b>{master}</b>",
+        "adm_master_busy": "👤 Új fodrász: <b>{master}</b>\n⚠️ {time}-kor ez a fodrász foglalt — válasszon másik napot.",
         "adm_resched_done": "🔁 <b>Áthelyezve</b>\n\n{summary}\n\nEddig: {old}\n{who}",
         "adm_resched_notified": "A vendég értesítést kapott.",
         "adm_resched_offline": "A vendég nincs a Telegramon — értesítse Ön.",
@@ -1841,6 +1866,468 @@ TEXTS: dict[str, dict[str, str]] = {
         "mst_rescheduled": "🔁 <b>Foglalás áthelyezve</b>\n\n💈 {service}\n👤 {client}\nEddig: {old}\nMost: <b>{new}</b>",
         "mst_digest": "☀️ <b>Jó reggelt, {name}!</b>\n\n{body}",
         "mst_heads_up": "⏰ <b>{time}-kor</b> ({min} perc múlva) — {client}\n💈 {service}",
+    },
+
+    # ------------------------------------------------------------------ DE
+    "de": {
+        # Kundenmenü
+        "btn_book": "📅 Termin buchen",
+        "btn_my": "🗓 Meine Termine",
+        "btn_prices": "💈 Leistungen & Preise",
+        "btn_contacts": "📍 Kontakt",
+        "start": "Hallo! 👋 Ich bin der Buchungsassistent von <b>{name}</b>.\n\n"
+                 "Ich helfe Ihnen, einen Termin zu buchen, zu verschieben oder abzusagen, und beantworte Ihre Fragen.\n\n"
+                 "Wählen Sie eine Option im Menü 👇 oder schreiben Sie einfach Ihre Frage.",
+        "start_no_ai": "Hallo! 👋 Ich bin der Buchungsassistent von <b>{name}</b>.\n\n"
+                       "Ich helfe Ihnen, einen Termin zu buchen, zu verschieben oder abzusagen.\nWählen Sie eine Option im Menü 👇",
+        "start_admin_hint": "\n\n🛠 Sie sind Administrator dieses Bots. Verwaltung: /admin",
+        # Buchung mit Buttons
+        "choose_service": "Wählen Sie eine Leistung:",
+        "choose_group": "✨ Wählen Sie eine Kategorie — danach finden wir einen Stylisten und eine passende Zeit für Sie 👇",
+        "choose_service_in_group": "<b>{group}</b>\nWählen Sie eine Leistung — danach finden wir einen Stylisten und eine passende Zeit für Sie 👇",
+        "btn_service": "{title} · {price}",
+        "choose_master": "💈 <b>{service}</b>\n💰 {price} · ⏱ {duration} Min.{description}\n\nWählen Sie einen Stylisten 👇",
+        "master_service_desc": "\n<i>{description}</i>",
+        "btn_any_master": "👥 Beliebiger Stylist",
+        "any_master": "beliebiger Stylist",
+        "choose_day": "💈 <b>{service}</b> · {master}\n\nWählen Sie einen Tag:",
+        "no_days": "💈 <b>{service}</b> · {master}\n\nLeider gibt es in den nächsten {days} Tagen keine freien Termine 😕\n"
+                   "Schreiben Sie uns, wir versuchen eine Lösung zu finden.",
+        "choose_time": "💈 <b>{service}</b> · {master}\n📅 {day}\n\nWählen Sie eine Uhrzeit:",
+        "no_times": "📅 {day}: keine freien Zeiten mehr. Bitte wählen Sie einen anderen Tag:",
+        "btn_back": "⬅️ Zurück",
+        "day_today": "Heute",
+        "day_tomorrow": "Morgen",
+        "card": "📝 <b>Bitte prüfen Sie:</b>\n\n💈 {service}\n👤 Stylist: {master}\n"
+                "📅 {day} um {time}\n⏱ {duration} Min. · 💰 {price}",
+        "btn_confirm": "✅ Bestätigen",
+        "btn_add_addon": "➕ {title} (+{duration} Min., +{price})",
+        "btn_other_time": "⬅️ Andere Zeit",
+        "btn_no_change": "✖️ Nein, ändern",
+        "ask_phone": "Zum Schluss noch Ihre Telefonnummer, damit der Stylist Sie erreichen kann.\n\n"
+                     "Tippen Sie unten auf <b>«📱 Nummer teilen»</b> oder schreiben Sie Ihre Nummer als Nachricht.",
+        "btn_share_phone": "📱 Nummer teilen",
+        "btn_cancel": "Abbrechen",
+        "bad_phone": "Das sieht nicht nach einer Telefonnummer aus 🤔\nTippen Sie auf «📱 Nummer teilen» "
+                     "oder schreiben Sie die Nummer mit Ländervorwahl, z. B. +4915112345678.",
+        "phone_saved": "Danke, die Nummer ist gespeichert 👍",
+        "booking_aborted": "In Ordnung, es wurde kein Termin gebucht. Falls Sie es sich anders überlegen — «📅 Termin buchen».",
+        "booked": "✅ <b>Fertig, Ihr Termin ist gebucht!</b>\n\n💈 {service}\n👤 {master}\n📅 {day} um {time}\n💰 {price}{address}\n\n"
+                  "Ich erinnere Sie rechtzeitig. Verschieben oder absagen — unter «🗓 Meine Termine».",
+        "booked_address": "\n📍 {address}",
+        "prepay_block": "\n\n💳 <b>Um Ihren Termin zu sichern — Anzahlung {amount}</b>\nKarte: <code>{card}</code>{recipient}\nBitte zahlen Sie bis <b>{deadline}</b>, sonst wird der Termin automatisch storniert. Die Anzahlung wird auf den Preis angerechnet.\n\nTippen Sie nach der Zahlung auf «✅ Ich habe bezahlt» oder senden Sie hier einen Screenshot 👇",
+        "prepay_recipient": "\nEmpfänger: {recipient}",
+        "btn_prepay_done": "✅ Ich habe bezahlt",
+        "btn_prepay_done_item": "✅ Ich habe bezahlt {short}",
+        "prepay_claimed_client": "Danke! 🙏 Der Administrator prüft die Zahlung und bestätigt Ihren Termin — wir melden uns hier.",
+        "prepay_screenshot_client": "Danke, Screenshot erhalten! 🙏 Der Administrator prüft die Zahlung und bestätigt Ihren Termin — wir melden uns hier.",
+        "prepay_photo_ask": "📸 Ist das ein Screenshot Ihrer Anzahlung?",
+        "btn_photo_is_payment": "✅ Ja, das ist die Zahlung",
+        "btn_photo_other": "Nein, etwas anderes",
+        "prepay_already_paid": "Die Anzahlung ist bereits bestätigt ✅",
+        "prepay_paid_client": "✅ <b>Anzahlung erhalten — Ihr Termin ist bestätigt!</b>\n💈 {service} · {master}\n📅 {day} um {time}\n\nWir freuen uns auf Sie 💛",
+        "client_cancelled_unpaid": "😔 Leider wurde Ihr Termin storniert: Die Anzahlung ist nicht rechtzeitig eingegangen.\n💈 {service} · {master}\n📅 {day} um {time}\n\nWenn es noch passt, buchen Sie gern erneut — wir freuen uns auf Sie 💛",
+        "my_prepay_waiting": "\n💳 Anzahlung {amount} ausstehend bis {deadline}",
+        "my_prepay_claimed": "\n💳 Wir prüfen Ihre Zahlung ⏳",
+        "my_prepay_paid": "\n💳 Anzahlung erhalten ✅",
+        "already_booked": "✅ Sie haben für diese Zeit bereits einen Termin.",
+        "slot_taken": "Oh, diese Zeit wurde gerade vergeben 😕 Bitte wählen Sie eine andere:",
+        "week_limit": "Sie haben diese Woche bereits die maximale Anzahl von {limit} Terminen 🙏\nWählen Sie eine andere Woche oder verschieben Sie einen Ihrer Termine.",
+        "too_many_active": "Sie haben bereits {count} aktive Termine — das ist das Maximum. "
+                           "Verschieben oder stornieren Sie einen unter «🗓 Meine Termine».",
+        "booking_error": "Der Termin konnte nicht gebucht werden 😕 Bitte versuchen Sie es erneut oder schreiben Sie uns.",
+        "proposal_declined": "In Ordnung 🙂 Schreiben Sie, was ich ändern soll, und ich finde eine andere Option.",
+        # Meine Termine
+        "my_none": "Sie haben noch keine anstehenden Termine 🙂\nZeit, das zu ändern — wählen Sie eine passende Zeit 👇",
+        "my_header": "✨ <b>Ihre Termine</b> ✨",
+        "my_item": "\n\n📅 <b>{day} um {time}</b>\n✂️ {service}\n💈 Stylist: {master}",
+        "my_footer": "\n\n💛 Wir freuen uns auf Sie! Kommen Sie ein paar Minuten früher, um anzukommen "
+                     "und sich auf Ihren neuen Look einzustimmen ✨\n\nWenn sich Ihre Pläne ändern, verschieben oder stornieren "
+                     "Sie den Termin mit den Buttons unten 👇",
+        "btn_resched_item": "🔁 Verschieben {short}",
+        "btn_cancel_item": "❌ Stornieren {short}",
+        "cancel_ask": "Diesen Termin stornieren?\n\n💈 {service} · {master}\n📅 {day} um {time}",
+        "btn_yes_cancel": "Ja, stornieren",
+        "btn_no": "Nein",
+        "cancel_kept": "In Ordnung, der Termin bleibt bestehen ✅",
+        "cancelled": "Termin storniert.\nWir hoffen, Sie ein anderes Mal zu sehen! Neu buchen — «📅 Termin buchen».",
+        "cancel_too_late": "Bis zu Ihrem Termin sind es weniger als {hours} Std., daher ist eine Online-Stornierung nicht mehr möglich. "
+                           "Bitte rufen Sie uns an{phone}.",
+        "cancel_too_late_phone": ": {phone}",
+        "booking_inactive": "Dieser Termin ist nicht mehr aktiv.",
+        "resched_choose_day": "🔁 <b>Verschieben</b>\n💈 {service} · {master}\nAktuell: {day} um {time}\n\nWählen Sie einen neuen Tag:",
+        "resched_choose_time": "🔁 <b>Verschieben</b>\n💈 {service} · {master}\n📅 {day}\n\nWählen Sie eine neue Uhrzeit:",
+        "resched_card": "🔁 <b>Termin verschieben?</b>\n\n💈 {service} · {master}\nBisher: {old}\nNeu: <b>{new}</b>",
+        "btn_confirm_resched": "✅ Verschieben",
+        "rescheduled": "✅ Termin verschoben.\n\n💈 {service} · {master}\n📅 <b>{day} um {time}</b>",
+        "resched_none": "In den nächsten {days} Tagen gibt es keine freien Termine 😕 Schreiben Sie uns, wir finden eine Lösung.",
+        # Informationen
+        "prices_header": "💈 <b>{name}</b>\n✨ <b>LEISTUNGEN &amp; PREISE</b> ✨\n<i>Wählen Sie, was Ihnen gefällt — mit dem Button unten können Sie sofort buchen 👇</i>",
+        "price_group": "\n\n━━━━━━━━━━━━\n<b>{group}</b>",
+        "price_item": "\n\n<b>{title}</b> — {price}\n⏱ {duration} Min.",
+        "price_desc": "\n{description}",
+        "prices_addons_header": "\n\n➕ <b>Zusatzleistungen</b> (per Button bei der Buchung)",
+        "price_addon_item": "\n{title} — +{price}, +{duration} Min.",
+        "contacts_header": "📍 <b>{name}</b>",
+        "contacts_address": "\n\n🏠 {address}",
+        "contacts_phone": "\n📞 {phone}",
+        "contacts_hours": "\n\n🕒 <b>Öffnungszeiten</b>\n{hours}",
+        "contacts_directions": "\n\n🚗 {directions}",
+        "contacts_payment": "\n💳 {payment}",
+        "contacts_prepay": "\n💳 Anzahlung {amount} — die Zahlungsdaten senden wir direkt nach der Buchung (zahlbar innerhalb von {hours} Std.).",
+        "contacts_masters_header": "\n\n━━━━━━━━━━━━\n👥 <b>Unser Team</b>",
+        "contacts_master": "\n\n💈 <b>{name}</b>{about}\n🗓 {schedule}",
+        "contacts_master_about": "\n<i>{about}</i>",
+        "btn_map": "🗺 Auf der Karte öffnen",
+        "day_off": "geschlossen",
+        # Erinnerungen
+        "reminder": "⏰ <b>Terminerinnerung</b>\n\n📅 {day} um {time}\n💈 {service} · {master}{address}",
+        "btn_will_come": "✅ Ich komme",
+        "btn_resched": "🔁 Verschieben",
+        "btn_cancel_booking": "❌ Stornieren",
+        "will_come_ok": "\n\n✅ Super, bis bald!",
+        "nudge": "Hallo, {name}! 👋\nIhr letzter Besuch ({service}) ist schon {weeks} Wochen her. "
+                 "Soll ich Ihnen wieder einen Termin buchen?",
+        "btn_book_again": "📅 Termin buchen",
+        "btn_no_nudges": "🔕 Nicht mehr erinnern",
+        "nudges_off": "In Ordnung, ich erinnere Sie nicht mehr 🙂",
+        # KI und Übergabe an einen Menschen
+        "ai_off": "Bitte wählen Sie eine Option im Menü 👇 — so geht es am schnellsten.",
+        "ai_error": "Entschuldigung, ich kann gerade nicht antworten 😔\nBitte nutzen Sie die Menü-Buttons 👇 oder versuchen Sie es etwas später.",
+        "ai_refusal": "Entschuldigung, dabei kann ich nicht helfen 🙂 Ich kann Ihnen einen Termin buchen oder Ihre Frage an den Administrator weiterleiten.",
+        "rate_limited": "Zu viele Nachrichten in kurzer Zeit 🙈 Bitte nutzen Sie die Menü-Buttons 👇 oder schreiben Sie etwas später.",
+        "handoff_client": "Ich habe Ihre Frage an den Administrator weitergeleitet — die Antwort kommt hier in diesem Chat 🙌",
+        "handoff_no_admin": "Mit dieser Frage wenden Sie sich am besten direkt an den Administrator{phone} 🙏",
+        "media_received": "Erhalten 👍 Ich leite es an den Administrator weiter — die Antwort kommt hier in diesem Chat.",
+        "voice_unsupported": "Sprachnachrichten kann ich leider noch nicht anhören 🙈 Bitte schreiben Sie Ihre Nachricht.",
+        "unsupported": "Ich verstehe nur Textnachrichten 🙂",
+        "paused_ack": "Danke für Ihre Nachricht! Der Administrator antwortet in Kürze.",
+        "admin_title": "Administrator",
+        "admin_reply_to_client": "👤 <b>{title}:</b>\n{text}",
+        "alert_expired": "Dieser Button ist nicht mehr aktuell. Bitte beginnen Sie von vorn.",
+        "alert_no_access": "Kein Zugriff",
+        "unknown_command": "Diesen Befehl kenne ich nicht 🤔 Bitte wählen Sie eine Option im Menü 👇",
+        "myid": "Ihre Telegram-ID: <code>{id}</code>",
+        "state_cleared": "Abgebrochen.",
+        # Admin
+        "admin_help": "🛠 <b>Verwaltung · {name}</b>\n\n"
+                      "/book — Kunden eintragen (Anruf, Laufkundschaft)\n"
+                      "/today — Termine heute\n"
+                      "/tomorrow — Termine morgen\n"
+                      "/day 30.10 — Termine an einem beliebigen Datum\n"
+                      "/week — Termine für 7 Tage\n"
+                      "/all — alle anstehenden Termine\n"
+                      "/find — Kunden suchen (Name, @Benutzername oder Telefon)\n"
+                      "/stats — Statistik und Umsatz für 30 Tage (/stats 7 — für 7)\n"
+                      "/export — Termine nach Excel exportieren\n"
+                      "/block — Zeit sperren (freier Tag, Urlaub, telefonische Buchung)\n"
+                      "/blocks — Liste der gesperrten Zeiten\n"
+                      "/masters — Stylisten im Bot: einladen, trennen\n"
+                      "/prices — Preise der Leistungen ändern\n"
+                      "/pause — KI ausschalten: alle Kundennachrichten gehen an Sie\n"
+                      "/resume — KI wieder einschalten\n"
+                      "/reload — Einstellungen aus der Datei neu laden\n"
+                      "/myid — Ihre Telegram-ID\n\n"
+                      "💬 Um einem Kunden zu antworten, antworten Sie (nach links wischen → «Antworten») auf seine vom Bot weitergeleitete Nachricht.\n\n"
+                      "KI-Antworten: {ai_status}",
+        "ai_status_on": "✅ an",
+        "ai_status_paused": "⏸ pausiert (/resume)",
+        "ai_status_nokey": "⚪️ aus (kein API-Schlüssel in settings.toml)",
+        "ai_status_disabled": "⚪️ in den Einstellungen des Geschäfts ausgeschaltet",
+        "adm_new_booking": "🆕 <b>Neuer Termin</b>{via}\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} um {time}\n💰 {price}",
+        "adm_via_ai": " · über den KI-Chat 🤖",
+        "adm_cancelled": "❌ <b>Stornierung</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} um {time}",
+        "adm_rescheduled": "🔁 <b>Verschoben</b>\n\n👤 {client}\n💈 {service} · {master}\nBisher: {old}\nJetzt: <b>{new}</b>",
+        "adm_handoff": "🙋 <b>Ihre Antwort wird benötigt</b>\n\n👤 {client}\n❓ {reason}{summary}\n\n"
+                       "<b>Letzte Nachrichten:</b>\n{transcript}\n\n"
+                       "↩️ Antworten Sie auf diese Nachricht (nach links wischen) — der Bot leitet Ihre Antwort an den Kunden weiter. "
+                       "Die KI ist für diesen Kunden {hours} Std. pausiert.",
+        "adm_handoff_summary": "\n📝 {summary}",
+        "adm_reason_media": "Der Kunde hat ein Foto oder eine Datei gesendet (vielleicht eine Zahlung)",
+        "adm_tr_client": "— Kunde: {text}",
+        "adm_tr_bot": "— Bot: {text}",
+        "adm_tr_empty": "(keine)",
+        "btn_adm_reply": "✍️ Antworten",
+        "btn_adm_resume": "▶️ Bot fortsetzen",
+        "adm_client_msg": "💬 <b>{client}</b>:\n{text}",
+        "adm_client_media": "💬 {client}",
+        "adm_reply_prompt": "Schreiben Sie Ihre Antwort an {client} in einer Nachricht (oder /cancel):",
+        "adm_reply_sent": "✅ Gesendet: {client}",
+        "adm_reply_failed": "⚠️ Senden fehlgeschlagen — der Kunde hat den Bot möglicherweise blockiert.",
+        "adm_resumed": "▶️ Die KI antwortet wieder: {client}",
+        "adm_day_header": "📅 <b>{day}</b>{master} — Termine: {count}",
+        "adm_day_empty": "📅 <b>{day}</b>{master} — keine Termine.",
+        "adm_item": "\n\n<b>{n}. {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}{flags}",
+        "adm_list_day": "\n\n📅 <b>{day}</b> — Termine: {count}",
+        "adm_list_hint": "\n\nTippen Sie auf einen Termin, um ihn zu verschieben, zu stornieren oder die Zahlung zu markieren 👇",
+        "adm_day_master": " · {name}",
+        "adm_day_hint": "\n\nTippen Sie auf einen Termin, um ihn zu verschieben, zu stornieren, ein Nichterscheinen oder die Zahlung zu markieren 👇",
+        "adm_day_pick": "📅 Wählen Sie einen Tag:",
+        "adm_day_usage": "📅 Geben Sie ein Datum an, z. B. /day 30.10 oder /day morgen",
+        "btn_adm_booking_item": "⚙️ {n} · {when} · {client}",
+        "btn_day_prev": "◀️ {day}",
+        "btn_day_next": "{day} ▶️",
+        "btn_day_pick": "📅 Datum",
+        "btn_master_all": "👥 Alle",
+        "btn_master_selected": "✅ {name}",
+        "adm_card": "📋 <b>Termin #{id}</b>\n\n{summary}\n💰 {price}",
+        "adm_card_source_buttons": "\n📱 Vom Kunden selbst gebucht",
+        "adm_card_source_ai": "\n🤖 Über den KI-Chat gebucht",
+        "adm_card_source_admin": "\n📞 Vom Administrator eingetragen",
+        "adm_card_noshow": "\n🚫 Nicht erschienen",
+        "adm_card_cancelled": "\n❌ Storniert — {by}",
+        "adm_card_confirmed": "\n✅ Der Kunde hat bestätigt, dass er kommt",
+        "btn_adm_resched": "🔁 Verschieben",
+        "btn_adm_cancel_short": "🗑 Stornieren",
+        "btn_adm_noshow": "🚫 Nicht erschienen",
+        "btn_adm_client": "👤 Kunde",
+        "btn_adm_write": "✉️ Nachricht",
+        "adm_resched_day": "🔁 <b>Termin #{id} verschieben</b>\n\n{summary}\n\nWählen Sie einen neuen Tag 👇",
+        "adm_resched_none": "🔁 Keine freien Tage zum Verschieben.\n\n{summary}",
+        "adm_resched_time": "🔁 <b>#{id}</b> · {service} · {master}\n📅 {day} — wählen Sie eine Uhrzeit 👇",
+        "adm_resched_confirm": "🔁 <b>Termin verschieben?</b>\n\n💈 {service}\n👤 {client}\nBisher: {old}\nNeu: <b>{new}</b>\n\n{who}",
+        "btn_adm_resched_yes": "✅ Verschieben",
+        "adm_resched_same": "Das ist dieselbe Zeit — nichts geändert.",
+        "btn_adm_change_master": "👤 Stylist wechseln",
+        "btn_adm_master_pick": "💈 {name}",
+        "adm_change_master": "👤 <b>Anderer Stylist für Termin #{id}</b>\n\n{summary}\n\nWählen Sie einen Stylisten 👇",
+        "adm_change_master_none": "👤 Kein anderer Stylist bietet «{service}» an.",
+        "adm_new_master": "👤 Neuer Stylist: <b>{master}</b>",
+        "adm_master_busy": "👤 Neuer Stylist: <b>{master}</b>\n⚠️ Um {time} ist dieser Stylist belegt — wählen Sie einen anderen Tag.",
+        "adm_resched_done": "🔁 <b>Verschoben</b>\n\n{summary}\n\nBisher: {old}\n{who}",
+        "adm_resched_notified": "Der Kunde wurde benachrichtigt.",
+        "adm_resched_offline": "Der Kunde ist nicht bei Telegram — bitte informieren Sie ihn selbst.",
+        "adm_find_usage": "🔎 Kunden suchen: /find Anna, /find @benutzername oder /find 0151 (Teil der Telefonnummer)",
+        "adm_find_none": "🔎 Niemand gefunden für «{q}».",
+        "adm_find_many": "🔎 Gefunden: {count}. Wählen Sie einen Kunden 👇",
+        "btn_adm_client_item": "👤 {label}",
+        "adm_client_card": "👤 <b>{name}</b>\n{contacts}\n{tg}\n\n📊 Besuche: {done} · nicht erschienen: {noshow} · Stornierungen: {cancelled}\n💰 Gesamt: {spent}{last}{upcoming}{notes}",
+        "adm_client_tg_yes": "✉️ Nutzt den Bot",
+        "adm_client_tg_no": "📵 Nicht bei Telegram",
+        "adm_client_last": "\n🗓 Letzter Besuch: {day} · {service}",
+        "adm_client_upcoming": "\n\n<b>Anstehend:</b>{items}",
+        "adm_client_upcoming_item": "\n• {when} · {service}",
+        "adm_client_notes": "\n\n📝 {notes}",
+        "btn_adm_client_booking": "⚙️ {when} · {service}",
+        "btn_adm_client_book": "📞 Eintragen",
+        "adm_export_usage": "📊 /export — Termine der letzten 30 Tage und alle anstehenden; /export 90 — für 90 Tage.",
+        "adm_export_empty": "Keine Termine in diesem Zeitraum.",
+        "adm_export_caption": "📊 Termine seit {start} (und alle anstehenden): {count}",
+        "adm_export_headers": "Datum|Uhrzeit|Ende|Stylist|Leistung|Preis|Status|Kunde|Telefon|Telegram|Quelle|Anzahlung|Notiz|Erstellt",
+        "adm_export_sheet": "Termine",
+        "adm_export_statuses": "geplant|erledigt|nicht erschienen|storniert",
+        "adm_export_sources": "Kunde|KI-Chat|Admin",
+        "adm_export_prepay": "ausstehend|laut Kunde bezahlt|bezahlt",
+        "adm_master_revenue": "\n   {name}: {count} · {revenue}",
+        "adm_evening_report": "🌙 <b>Tagesbilanz · {day}</b>\n\n✅ Erledigt: {done} · 🚫 nicht erschienen: {noshow} · ❌ storniert: {cancelled}\n💰 Umsatz: <b>{revenue}</b>{by_master}\n\n📅 Termine morgen: {tomorrow}",
+        "client_rescheduled_by_admin": "🔁 Der Administrator hat Ihren Termin verschoben:\n💈 {service} · {master}\nBisher: {old}\nJetzt: <b>{new}</b>\n\nWenn die Zeit nicht passt, ändern Sie sie unter «🗓 Meine Termine» oder schreiben Sie uns.",
+        "adm_booking_summary": "<b>{day}, {start}–{end}</b> · {master}\n💈 {service}\n👤 {client}",
+        "adm_noshow_done": "🚫 {client} ({time}) — nicht erschienen",
+        "adm_cancel_ask": "Diesen Termin stornieren?\n\n{booking}\n\n{who}",
+        "adm_cancel_notify": "Der Kunde erhält eine Telegram-Nachricht.",
+        "adm_cancel_offline": "Der Kunde ist nicht bei Telegram — bitte informieren Sie ihn selbst.",
+        "adm_cancelled_done": "🗑 <b>Storniert</b>\n\n{booking}\n\nDer Kunde wurde benachrichtigt.",
+        "adm_cancelled_done_offline": "🗑 <b>Storniert</b>\n\n{booking}\n\nDer Kunde ist nicht bei Telegram — bitte informieren Sie ihn selbst.",
+        "adm_cancelled_header": "\n\n➖➖➖\n❌ <b>Storniert</b> — {count}",
+        "adm_cancelled_item": "\n{day} {start} · {master} · {service} · {client} — {by}",
+        "adm_cancelled_by_client": "vom Kunden storniert",
+        "adm_cancelled_by_admin": "vom Administrator storniert",
+        "adm_new_booking_prepay": "\n💳 Anzahlung {amount} ausstehend bis {deadline}",
+        "adm_prepay_claim_note": "💳 <b>Der Kunde gibt an, bezahlt zu haben</b>\n\n{booking}\n\nPrüfen Sie, ob {amount} eingegangen ist, und bestätigen Sie 👇",
+        "adm_prepay_screenshot": "💳 <b>Der Kunde hat einen Zahlungs-Screenshot gesendet</b> (oben)\n\n{booking}\n\nPrüfen Sie, ob {amount} eingegangen ist, und bestätigen Sie 👇",
+        "adm_prepay_overdue": "⏰ <b>Zahlung noch nicht bestätigt</b>\nDer Kunde hat vor {hours} Std. angegeben, bezahlt zu haben. Bitte prüfen Sie: Solche Termine werden nicht automatisch storniert.\n\n{booking}",
+        "btn_adm_prepay_ok": "✅ Zahlung erhalten",
+        "btn_adm_cancel_booking": "🗑 Termin stornieren",
+        "adm_prepay_ok_done": "✅ <b>Anzahlung bestätigt</b>, der Kunde wurde benachrichtigt.\n\n{booking}",
+        "adm_prepay_ok_alert": "✅ Zahlung bestätigt",
+        "adm_prepay_already": "Die Anzahlung ist bereits bestätigt.",
+        "adm_prepay_waiting": "\n💳 ⏳ Anzahlung ausstehend",
+        "adm_prepay_claimed": "\n💳 ❔ laut Kunde bezahlt — bitte prüfen",
+        "adm_prepay_paid": "\n💳 ✅ Anzahlung erhalten",
+        "adm_cancelled_by_unpaid": "nicht bezahlt",
+        "adm_cancelled_unpaid": "⏰ <b>Termin automatisch storniert</b> — Anzahlung nicht innerhalb von {hours} Std. bestätigt.\n\n{booking}",
+        "btn_adm_clear_cancelled": "🧹 Stornierte ausblenden ({count})",
+        "adm_clear_ask": "Stornierte Termine aus der Liste entfernen ({count})?\nSie erscheinen nicht mehr in /all, bleiben aber in der Statistik.",
+        "btn_adm_yes_clear": "Ja, ausblenden",
+        "adm_cleared_done": "🧹 Stornierte Termine ausgeblendet: {count}. Aktualisierte Liste — /all",
+        "btn_adm_yes_cancel": "Ja, stornieren",
+        "client_cancelled_by_admin": "Leider hat der Administrator Ihren Termin storniert:\n💈 {service} · {master}\n"
+                                     "📅 {day} um {time}\n\nBitte wählen Sie eine andere Zeit — «📅 Termin buchen» — oder schreiben Sie uns.",
+        "adm_week_header": "🗓 <b>Termine für 7 Tage</b>",
+        "adm_week_empty": "\n\nKeine Termine.",
+        "adm_week_more": "\n\n➕ {count} weitere später — /all",
+        "adm_all_header": "🗓 <b>Alle anstehenden Termine</b>",
+        "adm_note_line": "\n📝 {note}",
+        "adm_via_admin": " · vom Administrator eingetragen 📞",
+        "btn_adm_book_confirm": "✅ Eintragen",
+        "btn_adm_book_cancel": "✖️ Abbrechen",
+        "adm_book_service": "📞 <b>Kunden eintragen</b>\nWählen Sie eine Leistung:",
+        "adm_book_group": "📞 <b>Kunden eintragen</b>\nWählen Sie eine Kategorie — dann Leistung, Stylist, Tag und Uhrzeit 👇",
+        "adm_book_in_group": "📞 <b>{group}</b>\nWählen Sie eine Leistung — dann Stylist, Tag und Uhrzeit 👇",
+        "adm_book_master": "📞 {service}\nWählen Sie einen Stylisten:",
+        "adm_book_day": "📞 {service} · {master}\nWählen Sie einen Tag:",
+        "adm_book_time": "📞 {service} · {master} · {day}\nWählen Sie eine Uhrzeit:",
+        "adm_book_no_days": "{master} hat keine freien Tage für «{service}». Wählen Sie einen anderen Stylisten:",
+        "adm_book_client_prompt": "📞 {service} · {master} · {day} um {time}\n\n"
+                                  "Senden Sie die Kundendaten in einer Nachricht: <b>Name</b> und <b>Telefon</b>, "
+                                  "ein Kommentar in einer neuen Zeile (optional). Zum Beispiel:\n"
+                                  "<code>Anna +4915112345678\nmöchte es kürzer als beim letzten Mal</code>\n\n"
+                                  "Oder teilen Sie den Telegram-Kontakt des Kunden (📎 → Kontakt).\n/cancel — abbrechen.",
+        "adm_book_need_name": "Ich sehe keinen Kundennamen. Senden Sie erneut: Name, Telefon, Kommentar in einer neuen Zeile.",
+        "adm_book_card": "📞 <b>Termin prüfen</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} um {time}\n"
+                         "💰 {price}{note}\n\n{hint}\n\nUm die Daten zu ändern, senden Sie sie einfach erneut.",
+        "adm_book_hint_tg": "✉️ Der Kunde nutzt den Bot bereits ({client}) — er erhält eine Nachricht und Erinnerungen.",
+        "adm_book_hint_known": "🗂 Der Kunde ist bereits in der Datenbank ({client}), aber nicht bei Telegram — keine Nachrichten.",
+        "adm_book_hint_offline": "📵 Neuer Kunde ohne Telegram — keine Nachrichten oder Erinnerungen.",
+        "adm_book_duplicate": "Der Kunde hat zu dieser Zeit bereits einen Termin (#{id}).",
+        "adm_book_done": "✅ <b>Eingetragen</b> <code>#{id}</code>\n👤 {client}\n💈 {service} · {master}\n"
+                         "📅 {day} um {time}{notified}",
+        "adm_book_notified": "\n\n✉️ Der Kunde hat eine Telegram-Nachricht erhalten.",
+        "adm_book_not_notified": "\n\n📵 Der Kunde hat keine Nachricht erhalten (nicht bei Telegram) — rufen Sie ihn bei Bedarf an.",
+        "adm_book_aborted": "Termin nicht erstellt.",
+        "client_booked_by_admin": "📞 Der Administrator hat einen Termin für Sie eingetragen:\n💈 {service} · {master}\n📅 {day} um {time}\n💰 {price}\n\n"
+                                  "Verschieben oder absagen — «🗓 Meine Termine».",
+        "adm_block_usage": "🔒 <b>Zeit sperren</b>\n\nFormat: <code>/block stylist datum [zeit] [notiz]</code>\n\n"
+                           "Beispiele:\n<code>/block {example} 30.10</code> — ganzer Tag\n"
+                           "<code>/block {example} 30.10 14:00-16:00 telefonische Buchung</code>\n"
+                           "<code>/block alle 31.12</code> — freier Tag für alle\n\nStylisten: {masters}",
+        "adm_block_bad": "Ich habe den Befehl nicht verstanden 🤔\n\n{usage}",
+        "adm_block_done": "🔒 Gesperrt: {master}, {day} {range}{note}",
+        "adm_block_conflicts": "\n\n⚠️ Zu dieser Zeit gibt es Termine — stornieren Sie sie (/today, /tomorrow) oder informieren Sie die Kunden:{lines}",
+        "adm_all_masters": "alle Stylisten",
+        "adm_whole_day": "(ganzer Tag)",
+        "adm_blocks_header": "🔒 <b>Gesperrte Zeiten</b> (zum Löschen tippen):",
+        "adm_blocks_empty": "Keine gesperrten Zeiten.",
+        "btn_adm_block_item": "🗑 {master} · {day} {range}",
+        "adm_block_deleted": "🔓 Gelöscht. Diese Zeit ist wieder buchbar.",
+        "adm_paused": "⏸ Die KI ist aus. Alle Kundennachrichten werden an Sie weitergeleitet; die Buchungs-Buttons funktionieren weiter.\n"
+                      "Einschalten: /resume",
+        "adm_resumed_all": "▶️ Die KI antwortet den Kunden wieder.",
+        "adm_reloaded": "🔄 Einstellungen neu geladen: Leistungen — {services}, Stylisten — {masters}.",
+        "adm_reload_failed": "❌ Die Einstellungsdatei enthält einen Fehler, die bisherigen Einstellungen bleiben aktiv:\n<code>{error}</code>",
+        "adm_reload_token": "\n⚠️ Der Bot-Token hat sich geändert — starten Sie den Bot neu, um ihn zu übernehmen.",
+        "adm_digest": "☀️ <b>Guten Morgen!</b>\n\n{body}",
+        "adm_ai_alert": "⚠️ <b>Die KI antwortet nicht</b> ({name})\n<code>{error}</code>\n\n"
+                        "Der Bot funktioniert weiter mit Buttons. Prüfen Sie den API-Schlüssel und das Guthaben auf console.anthropic.com.",
+        "adm_budget_alert": "⚠️ Tageslimit der KI erreicht ({name}). Bis zum Ende des Tages funktioniert der Bot nur mit Buttons. "
+                            "Das Limit ändern Sie in settings.toml (daily_token_limit).",
+        "adm_stats": "📊 <b>Statistik für {days} Tage</b>\n\n"
+                     "<b>Termine</b>\n"
+                     "• erstellt: {created} (KI-Chat: {by_ai}, Buttons: {by_buttons}, Admin: {by_admin})\n"
+                     "• nachts (22:00–08:00): {night}\n"
+                     "• erledigt: {done} · nicht erschienen: {noshow} · storniert: {cancelled}\n"
+                     "• anstehend: {upcoming}\n\n"
+                     "<b>Umsatz</b>\n"
+                     "• {revenue} · durchschnittlicher Bon {avg_check}{by_master}\n"
+                     "• erwartet aus anstehenden Terminen: {expected}\n\n"
+                     "<b>Gespräche</b>\n"
+                     "• Kunden, die geschrieben haben: {clients}\n"
+                     "• an Sie übergeben: {handoffs}\n"
+                     "• vom Bot allein erledigt: {auto_rate}\n\n"
+                     "<b>Erinnerungen</b>\n"
+                     "• gesendet: {reminders} · «Ich komme»: {confirmed}\n\n"
+                     "<b>KI</b>\n"
+                     "• bearbeitete Nachrichten: {ai_calls} · Tokens: {tokens}\n"
+                     "• geschätzte Kosten: ${cost}",
+        "adm_client_noname": "Kunde",
+        "cmd_start": "Hauptmenü",
+        "cmd_admin": "Verwaltung",
+        "cmd_today": "Termine heute",
+        "cmd_tomorrow": "Termine morgen",
+        "cmd_book": "Kunden eintragen",
+        "cmd_day": "Termine an einem Datum",
+        "cmd_find": "Kunden suchen",
+        "cmd_export": "Export nach Excel",
+        "cmd_week": "Termine für 7 Tage",
+        "cmd_all": "Alle anstehenden Termine",
+        "cmd_stats": "Statistik",
+        "cmd_block": "Zeit sperren",
+        "cmd_blocks": "Gesperrte Zeiten",
+        "cmd_pause": "KI ausschalten",
+        "cmd_resume": "KI einschalten",
+        "cmd_reload": "Einstellungen neu laden",
+        "cmd_myid": "Meine Telegram-ID",
+        "cmd_masters": "Stylisten im Bot",
+        "cmd_prices": "Preise ändern",
+        "adm_prices": "💰 <b>Preise der Leistungen</b>\nTippen Sie auf eine Leistung, um den Preis zu ändern 👇",
+        "adm_prices_changed": "\n\n✏️ — Preis hier im Bot geändert (in der Einstellungsdatei steht noch der alte).",
+        "adm_price_ask": "💰 <b>{title}</b>\nAktuell: <b>{price}</b>\n\nSenden Sie den neuen Preis als Zahl, z. B. 650.",
+        "adm_price_file": "\nIn der Einstellungsdatei: {price}.",
+        "btn_adm_price_reset": "↩️ Zurücksetzen auf {price}",
+        "adm_price_bad": "Das sieht nicht nach einem Preis aus 🤔 Senden Sie nur eine Zahl, z. B. 650. Abbrechen — /cancel",
+        "adm_price_done": "✅ <b>{title}</b>: {old} → <b>{new}</b>\nKunden und die KI sehen bereits den neuen Preis. "
+                          "Frühere Termine behalten den alten Preis.",
+        "adm_price_combos": "\nPreise der Kombinationen mit Zusatzleistungen neu berechnet.",
+        "adm_price_changed_note": "💰 {admin} hat einen Preis geändert: <b>{title}</b> {old} → <b>{new}</b>",
+        "cmd_my": "Mein Tag",
+        "cmd_myweek": "Meine Woche",
+        "cmd_off": "Zeit sperren",
+        "cmd_offs": "Meine gesperrten Zeiten",
+        # Stylisten: Admin
+        "adm_masters": "✂️ <b>Stylisten im Bot</b>\n\nEin verbundener Stylist sieht seine Termine, sperrt seine eigene "
+                       "Zeit und wird über seine Kunden benachrichtigt.\n{items}",
+        "adm_masters_on": "\n✅ <b>{name}</b> — {who}",
+        "adm_masters_off": "\n⚪️ <b>{name}</b> — nicht verbunden",
+        "btn_adm_master_invite": "🔗 Einladen: {name}",
+        "btn_adm_master_unlink": "✖️ Trennen: {name}",
+        "btn_adm_yes_unlink": "✖️ Ja, trennen",
+        "btn_adm_open": "📋 Termin öffnen",
+        "adm_master_invite": "🔗 Link für Stylist <b>{name}</b>:\n\n{link}\n\nLeiten Sie ihn an den Stylisten weiter — "
+                             "er öffnet ihn und tippt auf «Start». Einmaliger Link, gültig für {hours} Std.",
+        "adm_master_no_username": "Die Bot-Adresse konnte nicht abgerufen werden. Bitte versuchen Sie es in einer Minute erneut.",
+        "adm_master_unlink_ask": "Stylist <b>{name}</b> vom Bot trennen? Er sieht dann keine Termine mehr "
+                                 "und erhält keine Benachrichtigungen.",
+        "adm_master_unlinked": "✖️ Stylist {name} wurde vom Bot getrennt.",
+        "adm_master_joined": "✂️ Stylist <b>{name}</b> hat sich mit dem Bot verbunden ({who}).",
+        "adm_master_noshow": "🚫 <b>Stylist {master} hat ein Nichterscheinen markiert</b>\n\n{booking}",
+        "adm_master_off": "🌴 Stylist <b>{master}</b> hat Zeit gesperrt: {day} {range}",
+        "adm_master_off_conflicts": "\n\n⚠️ <b>Zu dieser Zeit gibt es Termine</b> — bitte sprechen Sie sich "
+                                    "mit den Kunden ab (verschieben oder stornieren):{lines}",
+        "adm_master_on": "🔓 Stylist <b>{master}</b> hat Zeit freigegeben: {day} {range}",
+        # Stylisten: der Stylist
+        "mst_invite_bad": "Dieser Link ist ungültig oder wurde bereits verwendet. Bitten Sie den Administrator um einen neuen.",
+        "mst_joined": "✅ <b>Sie sind als Stylist „{name}“ verbunden.</b>\n\n",
+        "mst_start": "✂️ <b>{name}</b>, Sie sind Stylist im Bot „{shop}“.\n\n"
+                     "📅 <b>Mein Tag</b> — Ihre Termine, Tage blättern ◀️ ▶️\n"
+                     "🗓 <b>Meine Woche</b> — Termine für 7 Tage\n"
+                     "🌴 <b>Zeit sperren</b> — freier Tag, Pause, private Termine\n"
+                     "🔒 <b>Meine gesperrten Zeiten</b> — ansehen und freigeben\n\n"
+                     "Der Bot informiert Sie über neue Termine, Stornierungen und Verschiebungen, sendet morgens "
+                     "Ihren Tagesplan und erinnert Sie vor jedem Kunden.",
+        "mst_unlinked": "Sie wurden als Stylist vom Bot getrennt. Als Kunde können Sie weiterhin buchen 👇",
+        "btn_mst_day": "📅 Mein Tag",
+        "btn_mst_week": "🗓 Meine Woche",
+        "btn_mst_off": "🌴 Zeit sperren",
+        "btn_mst_offs": "🔒 Meine gesperrten Zeiten",
+        "btn_mst_to_day": "⬅️ Zum Tag",
+        "mst_day_hint": "\n\nTippen Sie auf einen Termin, um die Karte zu öffnen 👇",
+        "mst_day_off": "\n\n🌴 Laut Ihrem Plan ein freier Tag.",
+        "mst_day_blocks": "\n\n🔒 Gesperrt: {ranges}",
+        "mst_week_header": "🗓 <b>Ihre Termine für 7 Tage</b>",
+        "mst_off_day": "🌴 <b>Zeit sperren</b>\n\nWählen Sie einen Tag:",
+        "mst_off_range": "🌴 <b>{day}</b> · Ihre Arbeitszeit {hours}\n\nDen ganzen Tag sperren oder ab welcher Uhrzeit?",
+        "mst_off_whole_only": "🌴 <b>{day}</b> · {hours}\n\nDen ganzen Tag sperren?",
+        "mst_off_no_work": "laut Plan freier Tag",
+        "mst_off_end": "🌴 <b>{day}</b>, ab {start}\n\nBis wann?",
+        "btn_mst_whole_day": "🌴 Ganzer Tag",
+        "btn_mst_off_yes": "✅ Sperren",
+        "mst_off_confirm": "<b>{day} {range}</b> sperren?\nKunden können diese Zeit dann nicht buchen.{conflicts}",
+        "mst_off_conflicts": "\n\n⚠️ Zu dieser Zeit gibt es Termine — der Administrator wird benachrichtigt, "
+                             "um sich mit den Kunden abzustimmen:{lines}",
+        "mst_off_done": "🔒 Gesperrt: <b>{day} {range}</b>. Kunden können diese Zeit nicht buchen.",
+        "mst_off_done_conflicts": "\n\n⚠️ Zu dieser Zeit bestehen noch Termine — der Administrator wurde benachrichtigt:{lines}",
+        "mst_offs_header": "🔒 <b>Ihre gesperrten Zeiten</b>\nZum Freigeben tippen:",
+        "mst_offs_header_none": "🔒 <b>Ihre gesperrten Zeiten</b>",
+        "mst_offs_admin": "\n\nVom Administrator gesperrt (nur er kann das ändern):{lines}",
+        "mst_offs_empty": "🔒 Keine gesperrten Zeiten. Zum Sperren — „🌴 Zeit sperren“.",
+        "btn_mst_block_item": "🗑 {label}",
+        "alert_mst_opened": "Die Zeit ist wieder buchbar",
+        "mst_new": "🆕 <b>Neuer Termin bei Ihnen</b>\n\n📅 {day} um {time}\n💈 {service}\n👤 {client}",
+        "mst_cancelled": "❌ <b>Termin storniert</b>\n\n📅 {day} um {time}\n💈 {service}\n👤 {client}",
+        "mst_moved": "🔁 <b>Termin an einen anderen Stylisten übergeben</b>\n\n📅 {day} um {time}\n💈 {service}\n👤 {client}",
+        "mst_rescheduled": "🔁 <b>Termin verschoben</b>\n\n💈 {service}\n👤 {client}\nBisher: {old}\nJetzt: <b>{new}</b>",
+        "mst_digest": "☀️ <b>Guten Morgen, {name}!</b>\n\n{body}",
+        "mst_heads_up": "⏰ <b>Um {time}</b> (in {min} Min.) — {client}\n💈 {service}",
     },
 }
 

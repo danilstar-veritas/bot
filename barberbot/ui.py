@@ -30,5 +30,10 @@ def _int(value: str) -> int:
         raise Expired() from None
 
 
+def _opt(parts: list[str], i: int) -> str | None:
+    """Необов'язкова частина даних кнопки (наприклад, новий майстер у кінці)."""
+    return parts[i] if len(parts) > i and parts[i] else None
+
+
 def _rows(buttons: list[dict], per_row: int) -> list[list[dict]]:
     return [buttons[i:i + per_row] for i in range(0, len(buttons), per_row)]

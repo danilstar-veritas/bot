@@ -330,6 +330,7 @@ class SlotTests(unittest.TestCase):
         self.assertEqual(t.day_button(date(2026, 10, 28), "en"), "Wed 28.10")
         self.assertEqual(t.day_label(date(2026, 10, 26), "hu"), "Ma, H 26.10")
         self.assertEqual(t.day_button(date(2026, 10, 28), "hu"), "Sze 28.10")
+        self.assertEqual(t.day_label(date(2026, 10, 27), "de"), "Morgen, Di 27.10")
         self.assertTrue(re.match(r"^\d{2}:\d{2}$", list(self.svc.free_slots("beard", "any", date(2026, 10, 27)))[0]))
 
 

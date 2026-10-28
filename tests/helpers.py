@@ -24,7 +24,7 @@ name = "Тест Барбер"
 bot_token = "{token}"
 admins = [{admin}]
 timezone = "Europe/Kyiv"
-languages = ["uk", "ru", "en", "hu"]
+languages = ["uk", "ru", "en", "hu", "de"]
 price_format = "{{price}} грн"
 
 [info]

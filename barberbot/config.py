@@ -18,6 +18,10 @@ from . import clock
 from .texts import SUPPORTED_LANGS, TEXTS, WEEKDAYS_SHORT, render
 
 ID_RE = re.compile(r"^[a-z0-9_-]{1,16}$")
+I18N_KEY_RE = re.compile(r"^([a-z_]+)_([a-z]{2})$")  # переклад поля: title_uk, about_de, admin_title_en…
+SERVICE_I18N = ("title", "short", "description", "group")
+MASTER_I18N = ("name", "about")
+INFO_I18N = ("address", "directions", "payment", "hours", "extra", "admin_title")
 SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 TOKEN_RE = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{30,}$")
 WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
@@ -83,9 +87,9 @@ def parse_day_spec(spec, where: str) -> list[tuple[time, time]]:
 def parse_user_date(value: str, today: date) -> date | None:
     """Дата від людини: 2026-10-30, 30.10.2026, 30.10, 30/10, сьогодні, завтра."""
     s = str(value).strip().lower()
-    if s in ("today", "сьогодні", "сегодня", "ma"):
+    if s in ("today", "сьогодні", "сегодня", "ma", "heute"):
         return today
-    if s in ("tomorrow", "завтра", "holnap"):
+    if s in ("tomorrow", "завтра", "holnap", "morgen"):
         return today + timedelta(days=1)
     m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
     try:
@@ -290,8 +294,17 @@ def load_settings(path: Path, base_dir: Path | None = None) -> Settings:
 
 # ---------------------------------------------------------------- tenant
 
+class _Translatable:
+    """Поле мовою клієнта: переклад із i18n (title_uk = …), інакше — базове значення (основна мова закладу)."""
+
+    i18n: dict[str, dict[str, str]]
+
+    def tr(self, name: str, lang: str | None) -> str:
+        return self.i18n.get(lang, {}).get(name) or getattr(self, name)
+
+
 @dataclass
-class Service:
+class Service(_Translatable):
     id: str
     title: str
     duration: int
@@ -306,21 +319,27 @@ class Service:
     base_id: str = ""
     addon_id: str = ""
     config_price: float | None = None  # ціна з файлу налаштувань (price — діюча, адмін може змінити в /prices)
+    i18n: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @property
     def label(self) -> str:
+        return self.label_in(None)
+
+    def label_in(self, lang: str | None) -> str:
         """Назва для списків: коротка (якщо задана) і зі смайликом (якщо заданий)."""
-        name = self.short or self.title
+        tr = self.i18n.get(lang)
+        name = (tr.get("short") or tr.get("title") if tr else None) or self.short or self.title
         return f"{self.icon} {name}" if self.icon else name
 
 
 @dataclass
-class Master:
+class Master(_Translatable):
     id: str
     name: str
     services: list[str]
     schedule: dict[int, list[tuple[time, time]]]
     about: str = ""
+    i18n: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -370,6 +389,7 @@ class Tenant:
     max_per_week: int = 0  # скільки записів один клієнт може мати на календарний тиждень (0 — без обмеження)
     report_at: time | None = None  # коли надсилати власнику вечірній підсумок дня (None — не надсилати)
     master_heads_up_min: int = 15  # за скільки хвилин нагадати майстру про клієнта (0 — не нагадувати)
+    info_i18n: dict[str, dict[str, str]] = field(default_factory=dict)  # переклади [info]: directions_de = …
 
     @property
     def prepay_enabled(self) -> bool:
@@ -389,8 +409,29 @@ class Tenant:
         return self.languages[0]
 
     def lang_for(self, language_code: str | None) -> str:
+        """Мова клієнта: його мова Telegram, якщо вона є в languages; інша — англійська (якщо є в списку)."""
         code = (language_code or "").lower()[:2]
-        return code if code in self.languages else self.languages[0]
+        if code in self.languages:
+            return code
+        return "en" if code and "en" in self.languages else self.languages[0]
+
+    # ---- дані закладу мовою клієнта
+    def info_in(self, key: str, lang: str | None) -> str:
+        return self.info_i18n.get(lang, {}).get(key) or self.info.get(key, "")
+
+    def service_title(self, service_id: str, lang: str | None, fallback: str) -> str:
+        """Назва послуги запису мовою клієнта; якщо послуги вже немає в налаштуваннях — збережена в записі."""
+        svc = self.services.get(service_id)
+        return svc.tr("title", lang) if svc else fallback
+
+    def master_name(self, master_id: str, lang: str | None, fallback: str) -> str:
+        m = self.masters.get(master_id)
+        return m.tr("name", lang) if m else fallback
+
+    def booking_names(self, b, lang: str | None) -> dict[str, str]:
+        """{service, master} запису мовою клієнта — для шаблонів текстів."""
+        return {"service": self.service_title(b["service_id"], lang, b["service_title"]),
+                "master": self.master_name(b["master_id"], lang, b["master_name"])}
 
     def t(self, lang: str, key: str, **kwargs) -> str:
         lang = lang if lang in SUPPORTED_LANGS else self.lang
@@ -500,6 +541,21 @@ def _resolve_secret(value: str) -> str:
     return value
 
 
+def _translations(sec: _Section, names: tuple[str, ...]) -> dict[str, dict[str, str]]:
+    """Переклади полів розділу: title_uk = "…", about_de = "…" → {"uk": {"title": "…"}, "de": {"about": "…"}}."""
+    out: dict[str, dict[str, str]] = {}
+    for key in sec.data:
+        m = I18N_KEY_RE.match(key)
+        if not m or m.group(1) not in names:
+            continue
+        if m.group(2) not in SUPPORTED_LANGS:
+            raise sec._err(key, f"мова «{m.group(2)}» не підтримується, є: {', '.join(SUPPORTED_LANGS)}.")
+        value = sec.str(key)
+        if value:
+            out.setdefault(m.group(2), {})[m.group(1)] = value
+    return out
+
+
 def load_tenant(path: Path, require_token: bool = True) -> Tenant:
     """require_token=False — для chat/eval у терміналі, де Telegram не потрібен."""
     raw = _read_toml(path)
@@ -563,6 +619,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
     info_s = s.section("info")
     info = {k: info_s.str(k) for k in ("address", "phone", "maps_url", "directions", "payment", "hours", "extra",
                                        "admin_title")}
+    info_i18n = _translations(info_s, INFO_I18N)
     if info["maps_url"] and not info["maps_url"].startswith(("http://", "https://")):
         raise ConfigError(f"{where} → [info] → maps_url: посилання має починатися з https://")
 
@@ -642,6 +699,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
             short=ss.str("short"),
             addon_for=[str(x) for x in ss.list("addon_for")],
             hidden=ss.bool("addon_only", False),  # лише додатком до іншої послуги, окремо не записують
+            i18n=_translations(ss, SERVICE_I18N),
         )
         services[sid].config_price = services[sid].price
         if services[sid].hidden and not services[sid].addon_for:
@@ -675,7 +733,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         if not any(schedule.get(d) for d in range(7)):
             warnings.append(f"У майстра «{ms.str('name') or mid}» немає жодного робочого дня — до нього не запишуться.")
         masters[mid] = Master(id=mid, name=ms.str("name", required=True), services=svc_ids,
-                              schedule=schedule, about=ms.str("about"))
+                              schedule=schedule, about=ms.str("about"), i18n=_translations(ms, MASTER_I18N))
 
     for sid, svc in services.items():
         if not any(sid in m.services for m in masters.values()):
@@ -694,7 +752,9 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
                 continue
             combo = Service(id=f"{base_id}+{addon.id}", title=f"{base.title} + {addon.title}",
                             duration=base.duration + addon.duration, price=base.price + addon.price,
-                            hidden=True, base_id=base_id, addon_id=addon.id)
+                            hidden=True, base_id=base_id, addon_id=addon.id,
+                            i18n={lang: {"title": f"{base.tr('title', lang)} + {addon.tr('title', lang)}"}
+                                  for lang in {*base.i18n, *addon.i18n}})
             services[combo.id] = combo
             for m in doers:
                 m.services.append(combo.id)
@@ -755,6 +815,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         max_per_week=b.int("max_per_week_per_client", 0, 0, 100),
         report_at=report_at,
         master_heads_up_min=n.int("master_heads_up_min", 15, 0, 240),
+        info_i18n=info_i18n,
     )
 
 

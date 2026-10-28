@@ -79,6 +79,7 @@ class AdminPanelTests(BotTestCase):
         self.assertIn(f"📋 <b>Запис #{self.b1['id']}</b>", text)
         self.assertIn("📱 Записався сам", text)
         self.assertEqual(self.kb(), [("🔁 Перенести", f"aRs:{self.b1['id']}"), ("🗑 Скасувати", f"acx:{self.b1['id']}"),
+                                     ("👤 Змінити майстра", f"aRm:{self.b1['id']}"),
                                      ("👤 Клієнт", f"aC:{self.ivan['id']}"), ("✉️ Написати", f"ar:{self.ivan['id']}")])
         # Клієнт без Telegram — без «Написати»; видно, хто записав.
         await self.press(f"aK:{self.b2['id']}")
@@ -118,6 +119,60 @@ class AdminPanelTests(BotTestCase):
         set_time(2026, 10, 27, 9, 45)  # клієнт міг би лише з 10:45, адмін — і на 10:00
         await self.press(f"aRd:{self.b1['id']}:20261027")
         self.assertIn(f"aRt:{self.b1['id']}:20261027:1000", [d for _, d in self.kb()])
+
+    # ---------------------------------------------------------------- зміна майстра
+    async def test_change_master_same_time(self):
+        bid = self.b1["id"]  # стрижка в Андрія, вт 27.10 12:00; Олег о 12:00 вільний
+        self.db.kv_set(self.slug, "master_tg:andriy", "701")
+        self.db.kv_set(self.slug, "master_tg:oleg", "702")
+        await self.press(f"aRm:{bid}")
+        self.assertIn(f"Інший майстер для запису #{bid}", self.last()["text"])
+        self.assertEqual(self.kb(), [("💈 Олег", f"aRM:{bid}:oleg"), ("⬅️ Назад", f"aKe:{bid}")])
+
+        await self.press(f"aRM:{bid}:oleg")  # той самий час вільний — одразу підтвердження
+        confirm = self.last()["text"]
+        self.assertIn("Було: Завтра, вт 27.10, 12:00 · Андрій", confirm)
+        self.assertIn("Стане: <b>Завтра, вт 27.10, 12:00 · Олег</b>", confirm)
+        self.assertEqual(self.kb()[0], ("✅ Перенести", f"aRy:{bid}:20261027:1200:oleg"))
+        self.assertEqual(self.kb()[1], ("⬅️ Інший час", f"aRd:{bid}:20261027:oleg"))
+
+        await self.press(f"aRy:{bid}:20261027:1200:oleg")
+        b = self.db.get_booking(bid)
+        self.assertEqual((b["master_id"], b["master_name"], b["start_at"]), ("oleg", "Олег", "2026-10-27 12:00"))
+        self.assertIn("🔁 <b>Перенесено</b>", self.last()["text"])
+        client_text = self.tg.last(CLIENT_ID)["text"]
+        self.assertIn("Було: Завтра, вт 27.10, 12:00 · Андрій", client_text)
+        self.assertIn("Стало: <b>Завтра, вт 27.10, 12:00 · Олег</b>", client_text)
+        self.assertIn("Запис перейшов до іншого майстра", self.tg.last(701)["text"])
+        self.assertIn("Новий запис до вас", self.tg.last(702)["text"])
+
+    async def test_change_master_busy_picks_other_day(self):
+        bid = self.b1["id"]
+        self.booking.create(self.olena["id"], "haircut", "oleg", datetime(2026, 10, 27, 12, 0), "admin")
+        await self.press(f"aRM:{bid}:oleg")
+        self.assertIn("О 12:00 цей майстер зайнятий", self.last()["text"])
+        days = [d for _, d in self.kb()]
+        self.assertIn(f"aRd:{bid}:20261028:oleg", days)
+        self.assertNotIn(f"aRd:{bid}:20261102:oleg", days)  # понеділок у Олега вихідний
+        self.assertEqual(self.kb()[-1], ("⬅️ Назад", f"aRm:{bid}"))
+
+        await self.press(f"aRd:{bid}:20261028:oleg")
+        self.assertIn("Олег", self.last()["text"])
+        self.assertIn(f"aRt:{bid}:20261028:1000:oleg", [d for _, d in self.kb()])
+        self.assertEqual(self.kb()[-1], ("⬅️ Назад", f"aRs:{bid}:oleg"))
+        await self.press(f"aRt:{bid}:20261028:1000:oleg")
+        self.assertIn("Стане: <b>Ср, 28.10, 10:00 · Олег</b>", self.last()["text"])
+        await self.press(f"aRy:{bid}:20261028:1000:oleg")
+        b = self.db.get_booking(bid)
+        self.assertEqual((b["master_id"], b["start_at"]), ("oleg", "2026-10-28 10:00"))
+
+    async def test_change_master_only_to_masters_with_service(self):
+        combo = self.booking.create(self.ivan["id"], "combo", "andriy", datetime(2026, 10, 28, 12, 0), "buttons")
+        await self.press(f"aK:{combo['id']}")
+        self.assertNotIn(f"aRm:{combo['id']}", [d for _, d in self.kb()])  # комбо робить лише Андрій
+        await self.press(f"aRM:{combo['id']}:oleg")
+        self.assertIn("неактуальна", self.tg.of("answerCallbackQuery")[-1]["text"])
+        self.assertEqual(self.db.get_booking(combo["id"])["master_id"], "andriy")
 
     # ---------------------------------------------------------------- клієнти
     async def test_find_and_client_card(self):
