@@ -306,6 +306,11 @@ class StaffWebTests(MasterTestCase):
                                              "master_id": "Олег"})
         await confirm(prepared)
         self.assertEqual(self.db.future_blocks(self.slug, self.tenant.now())[0]["master_id"], "oleg")
+        # закрити всім майстрам: перевірка після «так» не має губити «усім»
+        done = await confirm(await tool("block_time", {"date": "2026-10-28", "time_from": "17:00",
+                                                       "time_to": "18:00", "master_id": "all"}))
+        self.assertTrue(done.get("ok"), done)
+        self.assertIn(None, [b["master_id"] for b in self.db.future_blocks(self.slug, self.tenant.now())])
         self.assertEqual(resolve_ids(self.tenant, {"service_id": "борода", "master_id": "ANDRIY"}),
                          {"service_id": "beard", "master_id": "andriy"})
         self.assertEqual(resolve_ids(self.tenant, {"master_id": "Хтось"}), {"master_id": "Хтось"})

@@ -356,7 +356,8 @@ class StaffOps:
     def _check_block(self, u: StaffUser, a: dict) -> tuple[dict, str]:
         tenant = u.tenant
         master_id = a.get("master_id")
-        if u.is_owner and master_id in ("all", "*"):
+        # Повторна перевірка вже перевірених даних (a["start"]): master_id None там означає «усім майстрам».
+        if u.is_owner and (master_id in ("all", "*") or (master_id is None and a.get("start"))):
             master_id = None
         else:
             master_id = self._own_master(u, master_id) or u.master_id
