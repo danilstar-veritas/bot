@@ -176,7 +176,7 @@ class StaffWeb:
         parts = urllib.parse.urlsplit(target)
         m = MCP_RE.match(parts.path)
         if m:
-            return await self._mcp(m.group(1), m.group(2), method, body)
+            return await self._mcp(m.group(1), m.group(2), method, headers, body)
         m = PATH_RE.match(parts.path)
         if not m:
             if re.fullmatch(r"/staff/[A-Za-z0-9_-]{1,40}", parts.path):
@@ -218,16 +218,26 @@ class StaffWeb:
                            "purpose": "any maskable"}],
                 "shortcuts": [{"name": "🎙", "url": f"{base}#voice"}]}
 
-    async def _mcp(self, slug: str, key: str, method: str, body: bytes) -> Response:
+    async def _mcp(self, slug: str, key: str, method: str, headers: dict[str, str], body: bytes) -> Response:
         tenant = self.app.tenants.get(slug)
         chat = self._key_chat(tenant, key) if tenant else None
         u = staff_user(self.app, tenant, chat) if chat is not None else None
         if u is None:
-            return json_response({"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "Unauthorized"}},
-                                 401)
-        async with self.app.locks[(tenant.slug, u.chat_id)]:
-            status, data = await self.mcp.handle(u, method, body)
-        return json_response(data, status) if data is not None else Response(status, "")
+            # 404, а не 401: на 401 клієнти MCP (claude.ai, ChatGPT) вирішують, що потрібен вхід OAuth,
+            # і запам'ятовують це для всього сервера. Ключа в адресі немає чи його перевипущено — адреси просто немає.
+            response = json_response({"jsonrpc": "2.0", "id": None,
+                                      "error": {"code": -32001, "message": "Unknown connector URL"}}, 404)
+        else:
+            async with self.app.locks[(tenant.slug, u.chat_id)]:
+                status, data = await self.mcp.handle(u, method, body)
+            response = json_response(data, status) if data is not None else Response(status, "")
+        try:
+            rpc = json.loads(body.decode("utf-8") or "{}").get("method", "") if method == "POST" else ""
+        except (ValueError, AttributeError, UnicodeDecodeError):
+            rpc = "?"
+        log.info("MCP %s %s %s → %s (%s)", slug, method, rpc, response.status,
+                 short(headers.get("user-agent", ""), 60))  # ключ з адреси не пишемо
+        return response
 
     # ================================================================ API
     async def api(self, tenant, method: str, action: str, query: dict, headers: dict[str, str],

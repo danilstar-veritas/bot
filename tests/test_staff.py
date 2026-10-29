@@ -229,7 +229,7 @@ class StaffWebTests(MasterTestCase):
         self.assertFalse(res["result"]["isError"])
         self.assertEqual(self.db.get_booking(self.b_oleg["id"])["status"], "cancelled")
         r = await self.web.handle("POST", f"/mcp/{self.slug}/{'x' * 40}", {}, b"{}")
-        self.assertEqual(r.status, 401)
+        self.assertEqual(r.status, 404)  # не 401: інакше claude.ai вимагатиме вхід OAuth для всього сервера
 
     async def test_notifications_feed(self):
         h = await self.login()
