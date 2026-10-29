@@ -451,6 +451,11 @@ class MetaGateway:
         if not sender or sender in (entry_id, channel.page_id, channel.ig_id) or msg.get("is_echo"):
             return
         payload = (msg.get("quick_reply") or {}).get("payload") or (event.get("postback") or {}).get("payload")
+        # Перехід за посиланням m.me/<сторінка>?ref=m<код> — запрошення майстра (як /start m<код> у Telegram).
+        referral = event.get("referral") or (event.get("postback") or {}).get("referral") or {}
+        ref = str(referral.get("ref") or "")
+        if ref.startswith("m") and len(ref) > 1:
+            msg, payload = {"text": f"/start {ref}"}, None
         if not msg and not payload:
             return  # прочитання, реакції тощо
         chat = channel.chat_id(platform, sender)

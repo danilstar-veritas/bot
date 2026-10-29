@@ -25,6 +25,8 @@ from .masters import MASTER_COMMANDS, MasterPanel
 from .meta import PLATFORM_LABEL, MetaChannel, MetaGateway, MetaRouter, MetaWebhook, platform_of
 from .web import WebServer
 from .webapp import WebApp
+from .staff import StaffAssistant, staff_user
+from .staff_web import StaffWeb
 from .stats import compute_stats
 from .telegram import NetworkError, TelegramAPI, TelegramError, chunk_text, ibtn, inline_kb, reply_kb, url_btn
 from .texts import Raw
@@ -33,8 +35,8 @@ from .ui import Expired, _d, _int, _opt, _rows, _t
 
 log = logging.getLogger("barberbot")
 
-ADMIN_COMMANDS = ["start", "admin", "book", "today", "tomorrow", "day", "week", "all", "find", "stats", "export",
-                  "block", "blocks", "masters", "prices", "pause", "resume", "reload", "myid"]
+ADMIN_COMMANDS = ["start", "admin", "app", "book", "today", "tomorrow", "day", "week", "all", "find", "stats",
+                  "export", "block", "blocks", "masters", "prices", "pause", "resume", "reload", "myid"]
 PENDING_TTL = timedelta(minutes=30)
 POLL_TIMEOUT = 25
 
@@ -185,6 +187,9 @@ class BotApp(AdminPanel, MasterPanel):
         for t in self.tenants.values():
             self.apply_prices(t)
         self.agent = Agent(settings, llm) if llm is not None else None
+        # Помічник персоналу (staff.py) і адмінка на телефоні (staff_web.py).
+        self.staff = StaffAssistant(self, llm)
+        self.staff_web = StaffWeb(self) if settings.web_base_url else None
         # Крок діалогу користувача: (вид, дані). Зберігається в базі — переживає перезапуск.
         self.states = StateStore(db, "state", timedelta(hours=24), lambda v: list(v), lambda v: tuple(v))
         # Остання картка від AI, яку клієнт може підтвердити текстом «так»: (дані кнопки, до коли, id картки)
@@ -213,8 +218,8 @@ class BotApp(AdminPanel, MasterPanel):
         elif self.meta:
             meta_hook = MetaWebhook(self, self.meta, self.settings)
         webhook = None
-        if meta_hook or self.webapp:
-            webhook = WebServer(self.settings, meta_hook, self.webapp)
+        if meta_hook or self.webapp or self.staff_web:
+            webhook = WebServer(self.settings, meta_hook, self.webapp, self.staff_web)
             try:
                 await webhook.start()
             except OSError as e:
@@ -433,6 +438,8 @@ class BotApp(AdminPanel, MasterPanel):
 
     async def notify_admins(self, tenant: Tenant, text: str, kb: dict | None = None,
                             client_id: int | None = None) -> None:
+        if self.staff_web:
+            self.staff_web.notify(tenant, tenant.admins, text)
         # Усім адміністраторам одночасно, а не по черзі.
         results = await asyncio.gather(*(self.send(tenant, admin, text, kb) for admin in tenant.admins))
         if client_id is not None:
@@ -498,12 +505,16 @@ class BotApp(AdminPanel, MasterPanel):
             await self.run_menu(ctx, menu)
             return
 
-        if text:
+        if text and (ctx.is_admin or ctx.master_id):
+            await self.staff_text(ctx, text)
+        elif text:
             await self.on_text(ctx, msg, text)
         elif any(k in msg for k in ("photo", "document", "video", "animation")):
             await self.on_media(ctx, msg)
         elif any(k in msg for k in ("voice", "video_note", "audio")):
-            await ctx.send(ctx.t("voice_unsupported"))
+            # Голос розпізнає сам телефон (диктування на клавіатурі, 🎙 в адмінці, Siri) — сюди приходить текст.
+            staff = ctx.is_admin or ctx.master_id
+            await ctx.send(ctx.at("staff_voice_hint") if staff else ctx.t("voice_unsupported"))
         else:
             await ctx.send(ctx.t("unsupported"))
 
@@ -541,6 +552,8 @@ class BotApp(AdminPanel, MasterPanel):
             await ctx.send(ctx.t("state_cleared"), self.main_kb(ctx))
         elif cmd == "myid":
             await ctx.send(ctx.t("myid", id=ctx.user_id))
+        elif cmd == "app" and (ctx.is_admin or ctx.master_id):
+            await self.send_staff_app_link(ctx)
         elif ctx.master_id and cmd in MASTER_COMMANDS:
             await self.master_command(ctx, cmd)
         elif ctx.is_admin and cmd in ADMIN_COMMANDS:
@@ -653,8 +666,7 @@ class BotApp(AdminPanel, MasterPanel):
         tenant = ctx.tenant
         ctx.db.log_event(tenant.slug, ctx.client_id, "ai_message", tenant.now())
         async with self.typing(ctx):
-            result = await self.agent.reply(tenant, ctx.booking, ctx.db, ctx.client, short(text, 1500),
-                                            master_brief=self.master_ai_brief(ctx) if ctx.master_id else None)
+            result = await self.agent.reply(tenant, ctx.booking, ctx.db, ctx.client, short(text, 1500))
         if result.error:
             log.warning("[%s] AI: %s", tenant.name, result.error)
             ctx.db.log_event(tenant.slug, ctx.client_id, "ai_error", tenant.now(), {"error": short(result.error, 500)})
@@ -680,6 +692,44 @@ class BotApp(AdminPanel, MasterPanel):
                 handed = await self.do_handoff(ctx, effect.get("reason") or "", effect.get("summary") or "")
                 if not handed or not result.text:
                     await ctx.send(ctx.t("handoff_client") if handed else self.no_admin_text(ctx))
+
+    # ---------------------------------------------------------------- помічник персоналу
+    async def staff_text(self, ctx: Ctx, text: str) -> None:
+        """Власник або майстер пише (чи диктує) помічнику: розклад, звіти, зміни з підтвердженням."""
+        u = staff_user(self, ctx.tenant, ctx.user_id)
+        async with self.typing(ctx):
+            reply = await self.staff.ask(u, text)
+        parts = []
+        if reply.text:
+            parts.append(html.escape(reply.text))
+        kb = None
+        if reply.action:
+            parts.append(reply.action["summary_html"])
+            action_id = reply.action["action_id"]
+            kb = inline_kb([[ibtn(ctx.at("btn_staff_yes"), f"sY:{action_id}"),
+                             ibtn(ctx.at("btn_staff_no"), f"sN:{action_id}")]])
+        await ctx.send("\n\n".join(parts) or ctx.t("ai_error"), kb)
+
+    async def staff_button(self, ctx: Ctx, op: str, action_id: str, message_id: int | None) -> str | None:
+        u = staff_user(self, ctx.tenant, ctx.user_id)
+        if u is None:
+            return ctx.t("alert_no_access")
+        await ctx.clear_kb(message_id)
+        if op == "sN":
+            self.staff.ops.drop(u, action_id)
+            await ctx.send(ctx.at("staff_declined"))
+            return None
+        reply = await self.staff.confirm(u, action_id)
+        await ctx.send(html.escape(reply.text))
+        return None
+
+    async def send_staff_app_link(self, ctx: Ctx) -> None:
+        if self.staff_web is None:
+            await ctx.send(ctx.at("staff_app_off"))
+            return
+        link = self.staff_web.login_url(ctx.tenant, ctx.user_id)
+        await ctx.send(ctx.at("staff_app_link", shop=ctx.tenant.name),
+                       inline_kb([[url_btn(ctx.at("btn_staff_app"), link)]]))
 
     def no_admin_text(self, ctx: Ctx) -> str:
         phone = ctx.tenant.info.get("phone")
@@ -847,6 +897,8 @@ class BotApp(AdminPanel, MasterPanel):
         """Виконує дію кнопки. message_id=None — дія з тексту («так»): відповідь новим повідомленням."""
         parts = data.split(":")
         op, a = parts[0], parts[1:]
+        if op in ("sY", "sN") and len(a) == 1:
+            return await self.staff_button(ctx, op, a[0], message_id)
         if op.startswith("a") and op not in ("ac",):
             if not ctx.is_admin:
                 return ctx.t("alert_no_access")
@@ -1788,17 +1840,7 @@ class BotApp(AdminPanel, MasterPanel):
         client = db.get_client(client["id"])
         label = self.client_label(tenant, client)
 
-        notified = False
-        if client["tg_id"] > 0 and not client["blocked"]:
-            lang = client["lang"] or tenant.lang
-            notified = await self.send(tenant, client["tg_id"], tenant.t(
-                lang, "client_booked_by_admin", **tenant.booking_names(b, lang),
-                day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start),
-                price=tenant.price_str(b["price"])), tag="event") is not None
-            if notified:
-                add_note(db, tenant, client["id"], f"Адміністратор записав клієнта: запис №{b['id']}, "
-                         f"{b['service_title']}, {b['master_name']}, {start:%d.%m.%Y} о {fmt_hhmm(start)}.",
-                         self.settings)
+        notified = await self.tell_client_booked(tenant, b)
         day = tenant.day_label(start.date(), tenant.lang)
         await ctx.show(message_id, ctx.at(
             "adm_book_done", id=b["id"], client=label, service=b["service_title"], master=b["master_name"],
@@ -1975,13 +2017,7 @@ class BotApp(AdminPanel, MasterPanel):
             await ctx.show(message_id, ctx.at("adm_cancelled_done_offline" if offline else "adm_cancelled_done",
                                               booking=Raw(self._booking_summary(tenant, b, client))))
             await self.notify_master(tenant, b, "mst_cancelled")
-            if client and not offline and not client["blocked"]:
-                lang = client["lang"] or tenant.lang
-                start = parse_dt(b["start_at"])
-                await self.send(tenant, client["tg_id"], tenant.t(
-                    lang, "client_cancelled_by_admin", **tenant.booking_names(b, lang),
-                    day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)), tag="event")
-                add_note(ctx.db, tenant, client["id"], f"Адміністратор скасував запис №{b['id']}.", self.settings)
+            await self.tell_client_cancelled(tenant, b)
         elif op == "aPy" and len(a) == 1:
             b = ctx.db.get_booking(_int(a[0]))
             if b is None or b["tenant"] != tenant.slug or b["status"] != "active" or not b["prepay"]:

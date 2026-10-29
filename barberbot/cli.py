@@ -127,6 +127,8 @@ def cmd_check() -> int:
         print(f"{OK} Ключ {settings.ai_name} вказано")
     else:
         print(f"{WARN} Ключ {settings.ai_name} не вказано — бот працюватиме лише на кнопках (без AI-відповідей)")
+    if settings.web_base_url:
+        print(f"{OK} Адмінка на телефоні: {settings.web_base_url}/staff/<заклад>/ (посилання — команда /app у боті)")
     print()
     for e in errors:
         print(f"{FAIL} {e}\n")

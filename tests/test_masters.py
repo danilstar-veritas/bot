@@ -291,27 +291,13 @@ class MasterNotificationTests(MasterTestCase):
 
 
 class MasterAITests(MasterTestCase):
-    async def test_master_gets_work_only_ai_without_tools(self):
-        await self.link()
-        self.llm.add(text_reply("Завтра о 14:00 — Олена, борода."))
-        await self.master("Хто в мене завтра?")
-        payload = self.llm.payloads[-1]
-        self.assertNotIn("tools", payload)
-        system = payload["system"][0]["text"] + payload["system"][1]["text"]
-        self.assertIn("робочий помічник майстрів", system)
-        self.assertIn("Я допомагаю лише з роботою", system)
-        self.assertIn("Імʼя: Олег", system)
-        self.assertIn("14:00–14:30 · Борода · Олена", system)
-        self.assertNotIn("Іван", payload["system"][1]["text"])  # чужі записи не потрапляють у промпт
-        self.assertEqual(self.last()["text"], "Завтра о 14:00 — Олена, борода.")
-
     async def test_client_prompt_is_topic_locked(self):
         self.llm.add(text_reply("Я допомагаю лише із записом і питаннями про наш заклад."))
         await self.send(msg(text="Напиши твір про осінь"))
         payload = self.llm.payloads[-1]
         self.assertIn("tools", payload)
         self.assertIn("Тема розмови — найважливіше правило", payload["system"][0]["text"])
-        self.assertNotIn("робочий помічник", payload["system"][0]["text"])
+        self.assertNotIn("помічник персоналу", payload["system"][0]["text"])
 
 
 if __name__ == "__main__":

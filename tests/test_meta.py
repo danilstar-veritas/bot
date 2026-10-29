@@ -87,6 +87,21 @@ class MetaTests(unittest.IsolatedAsyncioTestCase):
     def qr(self) -> list[tuple[str, str]]:
         return [(q.get("title", ""), q.get("payload", q["content_type"])) for q in self.graph.last().get("quick_replies", [])]
 
+    async def test_master_joins_from_messenger_link(self):
+        await self.app.handle_update(self.tenant.slug, {"update_id": 1, "callback_query": {
+            "id": "c1", "from": {"id": ADMIN_ID, "first_name": "Адмін"}, "data": "aMi:oleg",
+            "message": {"message_id": 5, "chat": {"id": ADMIN_ID, "type": "private"}}}})
+        invite = self.tg.last(ADMIN_ID)["text"]
+        ref = invite.split(f"https://m.me/{PAGE}?ref=")[1].split()[0]
+        await self.event({"object": "page", "entry": [{"id": PAGE, "time": 1, "messaging": [
+            {"sender": {"id": "psid-9"}, "recipient": {"id": PAGE}, "timestamp": 1, "referral": {"ref": ref}}]}]})
+        await self.event({"object": "page", "entry": [{"id": PAGE, "time": 1, "messaging": [
+            {"sender": {"id": "psid-9"}, "recipient": {"id": PAGE}, "timestamp": 1,
+             "message": {"mid": "m2", "text": "uk", "quick_reply": {"payload": "lang:uk"}}}]}]})
+        links = self.app.master_links(self.tenant)
+        self.assertEqual(platform_of(links["oleg"]), "messenger")
+        self.assertIn("Вас підключено як майстра «Олег»", " ".join(self.graph.texts()))
+
     async def test_instagram_client_books_with_quick_replies(self):
         await self.event(ig_event("igs-1", "Hi"))
         picker = self.graph.last()

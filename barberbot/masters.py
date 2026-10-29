@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("barberbot")
 
-MASTER_COMMANDS = ["start", "my", "myweek", "off", "offs", "myid"]
+MASTER_COMMANDS = ["start", "app", "my", "myweek", "off", "offs", "myid"]
 MASTER_MENU = ("btn_mst_day", "btn_mst_week", "btn_mst_off", "btn_mst_offs")
 INVITE_HOURS = 48
 OFF_DAYS = 28  # на скільки днів уперед майстер може закрити свій час
@@ -112,8 +112,11 @@ class MasterPanel:
         until = tenant.now() + timedelta(hours=INVITE_HOURS)
         ctx.db.kv_set(tenant.slug, f"master_invite:{code}",
                       json.dumps({"master": master_id, "until": until.isoformat()}))
-        await ctx.send(ctx.at("adm_master_invite", name=master.name, hours=INVITE_HOURS,
-                              link=f"https://t.me/{username}?start=m{code}"))
+        link = f"https://t.me/{username}?start=m{code}"
+        router = self.meta_routers.get(tenant.slug)
+        if router is not None:  # майстер без Telegram підключиться через Messenger
+            link += f"\n\nMessenger: https://m.me/{router.channel.page_id}?ref=m{code}"
+        await ctx.send(ctx.at("adm_master_invite", name=master.name, hours=INVITE_HOURS, link=link))
 
     async def admin_master_unlink(self, ctx: Ctx, master_id: str, message_id: int | None, confirmed: bool) -> None:
         tenant = ctx.tenant
@@ -431,31 +434,6 @@ class MasterPanel:
             day=tenant.day_label(parse_dt(bl["start_at"]).date(), tenant.lang), range=self._block_range(tenant, bl)))
         return ctx.at("alert_mst_opened")
 
-    # ================================================================ AI для майстра
-    def master_ai_brief(self, ctx: Ctx) -> str:
-        """Динамічна частина промпту, коли AI пише майстер: хто він, зараз, його записи й закритий час."""
-        tenant = ctx.tenant
-        master = tenant.masters[ctx.master_id]
-        now = tenant.now()
-        lines = ["## Зараз", f"{tenant.day_label(now.date(), 'uk')}, {fmt_hhmm(now)} (місцевий час закладу).", "",
-                 f"## Майстер\nІмʼя: {master.name} (id {master.id}). "
-                 f"Графік: {tenant.schedule_summary('uk', master).replace(chr(10), '; ')}.", "",
-                 "Записи майстра на 7 днів (час · послуга · клієнт):"]
-        rows = [r for r in self._active_from(tenant, now.date(), 7) if r["master_id"] == master.id]
-        for r in rows:
-            name = self._short_name(tenant, r)
-            day = tenant.day_label(date.fromisoformat(r["start_at"][:10]), "uk")
-            lines.append(f"- {day} {r['start_at'][11:16]}–{r['end_at'][11:16]} · {r['service_title']} · {name}"
-                         + (f" · коментар: {r['note']}" if r["note"] else ""))
-        if not rows:
-            lines.append("- записів немає")
-        blocks = [bl for bl in ctx.db.future_blocks(tenant.slug, now) if bl["master_id"] in (master.id, None)]
-        if blocks:
-            lines.append("Закритий час:")
-            lines += [f"- {tenant.day_label(parse_dt(bl['start_at']).date(), 'uk')} {self._block_range(tenant, bl)}"
-                      for bl in blocks[:20]]
-        return "\n".join(lines)
-
     # ================================================================ кнопки майстра
     async def master_callback(self, ctx: Ctx, op: str, a: list[str], message_id: int | None) -> str | None:
         if op == "mD" and len(a) == 1:
@@ -506,6 +484,8 @@ class MasterPanel:
         kb = None
         if key in ("mst_new", "mst_rescheduled"):
             kb = inline_kb([[ibtn(tenant.t(tenant.lang, "btn_adm_open"), f"mK:{b['id']}")]])
+        if self.staff_web:
+            self.staff_web.notify(tenant, [chat], text)
         await self.send(tenant, chat, text, kb)
 
     async def notify_master_resched(self, tenant: Tenant, old, new) -> None:

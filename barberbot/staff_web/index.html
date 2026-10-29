@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#181614">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Admin</title>
+<style>
+:root {
+  --bg: #181614; --surface: #221f1b; --surface2: #2c2823; --line: #3a352e;
+  --text: #f3eee7; --muted: #a59b8e; --gold: #d6aa5c; --gold-ink: #1c1710;
+  --red: #e5735c; --green: #74c08f; --blue: #7fb0e0;
+  --radius: 14px; --safe-b: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f6f2ec; --surface: #ffffff; --surface2: #f0ebe3; --line: #e2dbd0;
+          --text: #1f1b16; --muted: #7a7064; --gold: #b8872f; --gold-ink: #ffffff; --red: #c9533c; --green: #3d8f5c; --blue: #3c78b4; }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { padding-bottom: calc(72px + var(--safe-b)); min-height: 100vh; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 8px;
+         border-bottom: 1px solid var(--line); }
+.topline { display: flex; align-items: center; gap: 8px; }
+.shop { font-weight: 700; font-size: 18px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iconbtn { background: none; border: 0; width: 40px; height: 40px; border-radius: 12px; font-size: 20px; position: relative; }
+.iconbtn:active { background: var(--surface2); }
+.dot { position: absolute; top: 7px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+.datenav { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.datenav .label { flex: 1; text-align: center; font-weight: 600; }
+.datenav input[type=date] { position: absolute; opacity: 0; pointer-events: none; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 14px; white-space: nowrap; }
+.chip.on { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); font-weight: 600; }
+main { padding: 12px 16px; max-width: 720px; margin: 0 auto; }
+.hours { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+.bk { display: grid; grid-template-columns: 64px 1fr; gap: 10px; width: 100%; text-align: left; }
+.bk .time { font-weight: 700; font-size: 18px; }
+.bk .end { color: var(--muted); font-size: 13px; }
+.bk .who { font-weight: 600; }
+.bk .what { color: var(--muted); font-size: 14px; }
+.bk.past { opacity: .55; }
+.bk.noshow .who { text-decoration: line-through; }
+.badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.badge { font-size: 12px; border-radius: 6px; padding: 1px 6px; background: var(--surface2); color: var(--muted); }
+.badge.red { color: var(--red); } .badge.green { color: var(--green); } .badge.gold { color: var(--gold); }
+.block { display: flex; align-items: center; gap: 10px; background: var(--surface2); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 10px; color: var(--muted); }
+.block span { flex: 1; }
+.empty { color: var(--muted); text-align: center; padding: 36px 8px; }
+.dayhead { margin: 18px 0 8px; font-weight: 700; display: flex; justify-content: space-between; }
+.dayhead small { color: var(--muted); font-weight: 400; }
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; background: var(--surface); border-top: 1px solid var(--line);
+           padding-bottom: var(--safe-b); }
+nav.tabs button { flex: 1; background: none; border: 0; padding: 8px 0 10px; font-size: 11px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+nav.tabs button b { font-size: 20px; font-weight: 400; line-height: 1.2; }
+nav.tabs button.on { color: var(--gold); }
+.fab { position: fixed; right: 16px; bottom: calc(84px + var(--safe-b)); z-index: 7; width: 64px; height: 64px; border-radius: 50%;
+       border: 0; background: var(--gold); color: var(--gold-ink); font-size: 28px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.fab.rec { background: var(--red); color: #fff; animation: pulse 1.2s infinite; }
+.fab.wait { opacity: .7; }
+.fab2 { position: fixed; right: 92px; bottom: calc(92px + var(--safe-b)); z-index: 7; width: 48px; height: 48px; border-radius: 50%;
+        border: 1px solid var(--line); background: var(--surface); font-size: 24px; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,115,92,.6); } 50% { box-shadow: 0 0 0 14px rgba(229,115,92,0); } }
+.sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20; display: none; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--surface); border-radius: 20px 20px 0 0;
+         max-height: 88vh; overflow-y: auto; padding: 8px 16px calc(20px + var(--safe-b)); transform: translateY(105%); transition: transform .22s ease; }
+.sheet.open { transform: none; }
+.sheet .grip { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 4px auto 12px; }
+.sheet h3 { margin: 0 0 12px; font-size: 18px; }
+.sheet .sub { color: var(--muted); font-size: 14px; margin: -6px 0 12px; white-space: pre-line; }
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; }
+.btn { display: block; width: 100%; border: 0; border-radius: 12px; padding: 13px 14px; margin: 8px 0 0; background: var(--surface2); font-weight: 600; text-align: center; }
+a.btn { color: var(--text); text-decoration: none; }
+.btn.gold { background: var(--gold); color: var(--gold-ink); }
+.btn.red { color: var(--red); }
+.btn:disabled { opacity: .5; }
+label.f { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+input.f, select.f, textarea.f { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 11px 12px; }
+textarea.f { min-height: 80px; resize: vertical; }
+.slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.slots .chip { min-width: 64px; text-align: center; }
+.summary { white-space: pre-line; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.bubble { max-width: 85%; padding: 8px 12px; border-radius: 14px; margin: 4px 0; white-space: pre-wrap; font-size: 15px; }
+.bubble.client { background: var(--surface2); }
+.bubble.bot { background: var(--bg); border: 1px solid var(--line); margin-left: auto; }
+.bubble.admin { background: var(--gold); color: var(--gold-ink); margin-left: auto; }
+.bubble small { display: block; opacity: .6; font-size: 11px; }
+.chatrow { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; }
+.chatrow .nm { font-weight: 600; } .chatrow .lt { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatrow > div { min-width: 0; flex: 1; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+.stat b { display: block; font-size: 24px; } .stat span { color: var(--muted); font-size: 13px; }
+.list { margin: 0; padding: 0; list-style: none; }
+.list li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.heard { color: var(--muted); font-style: italic; margin-bottom: 8px; }
+.reply { font-size: 18px; margin-bottom: 8px; white-space: pre-line; }
+.ask { display: flex; gap: 8px; margin-top: 14px; }
+.ask input { flex: 1; }
+.ask button { border: 0; border-radius: 10px; background: var(--gold); color: var(--gold-ink); padding: 0 14px; font-weight: 700; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(160px + var(--safe-b)); z-index: 30; background: var(--text); color: var(--bg);
+         border-radius: 12px; padding: 12px 14px; text-align: center; display: none; }
+.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.steps { padding-left: 20px; color: var(--muted); font-size: 14px; } .steps li { margin: 4px 0; }
+.ex { color: var(--muted); font-size: 14px; } .ex li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="topline">
+    <div class="shop" id="shop">…</div>
+    <button class="iconbtn" id="bell" aria-label="notifications">🔔<i class="dot" id="belldot" hidden></i></button>
+  </div>
+  <div id="dateblock">
+    <div class="datenav">
+      <button class="iconbtn" id="prev">◀</button>
+      <button class="iconbtn label" id="datelabel" style="width:auto"></button>
+      <input type="date" id="datepick">
+      <button class="iconbtn" id="next">▶</button>
+    </div>
+    <div class="chips" id="masterchips"></div>
+  </div>
+</header>
+<main id="main"></main>
+<button class="fab2" id="plus" aria-label="add">＋</button>
+<button class="fab" id="mic" aria-label="speak">🎙</button>
+<nav class="tabs" id="tabs"></nav>
+<div class="sheet-bg" id="sheetbg"></div>
+<div class="sheet" id="sheet"><div class="grip"></div><div id="sheetbody"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+const BASE = location.pathname.replace(/[^/]*$/, "");
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// ------------------------------------------------------------------ тексти
+const I18N = {
+  uk: { dictate_hint: "Натисніть 🎤 на клавіатурі телефону й говоріть — або напишіть.", voice_lang: "Мова голосу", today: "Сьогодні", week: "Тиждень", chats: "Чати", report: "Звіт", more: "Ще", no_bookings: "Записів немає", day_off: "вихідний",
+    open: "Відкрити", all: "Усі", new_booking: "Записати клієнта", block_time: "Закрити час", service: "Послуга", master: "Майстер",
+    any: "Будь-який", date: "Дата", from: "З", to: "До", whole_day: "Увесь день", client: "Клієнт", search: "Імʼя або телефон…",
+    new_client: "Новий клієнт", name: "Імʼя", phone: "Телефон", note: "Коментар", times: "Вільний час", no_times: "На цей день вільного часу немає",
+    next: "Далі", yes: "✅ Так, виконати", no: "Ні", cancel: "Скасувати запис", resched: "Перенести", noshow: "Не прийшов", write: "Написати клієнту",
+    call: "Подзвонити", close: "Закрити", p_today: "Сьогодні", p_yesterday: "Вчора", p_week: "7 днів", p_month: "30 днів", visits: "візитів",
+    revenue: "виручка", planned: "ще заплановано", expected: "очікується", noshows: "неявок", cancelled: "скасовано", by_master: "По майстрах",
+    bot: "Бот", by_ai: "записав AI", night: "записались вночі", auto: "без участі людини", cost: "AI, $", speak: "Говоріть…", thinking: "Думаю…",
+    type: "Напишіть помічнику…", heard: "Ви сказали", notif: "Сповіщення", push_on: "Увімкнути сповіщення на цьому телефоні", push_ok: "Сповіщення увімкнено",
+    push_ios: "На iPhone сповіщення працюють, коли адмінку додано на головний екран: «Поділитися» → «На початковий екран».",
+    siri: "Siri та Google", siri_steps: ["Натисніть «Створити ключ».", "iPhone → «Команди» → «+» → назвіть, напр., «Барбер».",
+      "Дії: «Диктувати текст» → «Отримати вміст URL» (адреса нижче, POST, заголовок Authorization = Bearer ключ, JSON-поле text = Диктований текст) → «Отримати значення словника» text → «Озвучити текст».",
+      "Скажіть: «Привіт, Siri, Барбер» — і просто говоріть. Siri не розмовляє угорською — назву команди кажіть мовою Siri, а сам запит диктуйте як зручно.",
+      "Android: додайте адмінку на головний екран, утримуйте іконку → 🎙 — відкриється одразу з записом голосу."],
+    make_key: "Створити ключ", key_warn: "Новий ключ вимикає попередній. Нікому його не показуйте.", mcp: "ChatGPT / Claude / Gemini",
+    mcp_steps: ["Створіть ключ (вище) і скопіюйте адресу конектора.", "ChatGPT: Налаштування → Apps & Connectors → Create (режим розробника) → вставте адресу.",
+      "Claude: Налаштування → Connectors → Add custom connector → вставте адресу.", "Далі просто питайте свій AI: «що в мене завтра в салоні?»"],
+    copy: "Копіювати", copied: "Скопійовано", logout: "Вийти", owner: "Власник", master_role: "Майстер", waiting: "чекає на відповідь",
+    resume: "Повернути AI", reply: "Відповісти", no_chats: "Розмов за 3 дні немає", examples: "Що можна сказати",
+    ex: ["Хто в мене сьогодні?", "Закрий мені завтра з 14 до 16", "Запиши Андраша на стрижку в пʼятницю о 17", "Перенеси Петра на 18:00", "Олена не прийшла", "Скільки ми заробили за тиждень?"],
+    mic_denied: "Немає доступу до мікрофона", error: "Помилка, спробуйте ще раз",
+    status_noshow: "не прийшов", status_cancelled: "скасовано", ai: "🤖 AI", confirmed: "✅ підтвердив", phone_book: "📞 адмін", notes: "Сповіщення", no_notes: "Поки нічого",
+    auto_listen: "Після питання «Підтверджуєте?» слухати відповідь автоматично", past: "минув", to_master: "До майстра", all_masters: "Усі майстри" },
+  en: { dictate_hint: "Tap 🎤 on your phone keyboard and speak — or type.", voice_lang: "Voice language", today: "Today", week: "Week", chats: "Chats", report: "Report", more: "More", no_bookings: "No bookings", day_off: "day off",
+    open: "Reopen", all: "All", new_booking: "Book a client", block_time: "Block time", service: "Service", master: "Master",
+    any: "Any", date: "Date", from: "From", to: "To", whole_day: "Whole day", client: "Client", search: "Name or phone…",
+    new_client: "New client", name: "Name", phone: "Phone", note: "Note", times: "Free times", no_times: "No free time this day",
+    next: "Next", yes: "✅ Yes, do it", no: "No", cancel: "Cancel booking", resched: "Reschedule", noshow: "No-show", write: "Message client",
+    call: "Call", close: "Close", p_today: "Today", p_yesterday: "Yesterday", p_week: "7 days", p_month: "30 days", visits: "visits",
+    revenue: "revenue", planned: "still planned", expected: "expected", noshows: "no-shows", cancelled: "cancelled", by_master: "By master",
+    bot: "Bot", by_ai: "booked by AI", night: "booked at night", auto: "handled without a human", cost: "AI, $", speak: "Speak…", thinking: "Thinking…",
+    type: "Type to the assistant…", heard: "You said", notif: "Notifications", push_on: "Turn on notifications on this phone", push_ok: "Notifications are on",
+    push_ios: "On iPhone, notifications work once the app is on the home screen: Share → Add to Home Screen.",
+    siri: "Siri & Google", siri_steps: ["Tap “Create key”.", "iPhone → Shortcuts → “+” → name it, e.g. “Barber”.",
+      "Actions: Dictate Text → Get Contents of URL (address below, POST, header Authorization = Bearer key, JSON field text = Dictated Text) → Get Dictionary Value “text” → Speak Text.",
+      "Say “Hey Siri, Barber” and just talk.", "Android: add the app to the home screen, long-press the icon → 🎙 — it opens straight into voice recording."],
+    make_key: "Create key", key_warn: "A new key disables the previous one. Keep it private.", mcp: "ChatGPT / Claude / Gemini",
+    mcp_steps: ["Create a key (above) and copy the connector URL.", "ChatGPT: Settings → Apps & Connectors → Create (developer mode) → paste the URL.",
+      "Claude: Settings → Connectors → Add custom connector → paste the URL.", "Then just ask your AI: “what's on at the shop tomorrow?”"],
+    copy: "Copy", copied: "Copied", logout: "Log out", owner: "Owner", master_role: "Master", waiting: "waiting for a reply",
+    resume: "Hand back to AI", reply: "Reply", no_chats: "No conversations in the last 3 days", examples: "Things you can say",
+    ex: ["Who's coming today?", "Block tomorrow from 2 to 4 pm", "Book Andras for a haircut on Friday at 5", "Move Peter to 6 pm", "Elena didn't show up", "How much did we make this week?"],
+    mic_denied: "No microphone access", error: "Something went wrong, try again",
+    status_noshow: "no-show", status_cancelled: "cancelled", ai: "🤖 AI", confirmed: "✅ confirmed", phone_book: "📞 admin", notes: "Notifications", no_notes: "Nothing yet",
+    auto_listen: "After “Confirm?” listen for the answer automatically", past: "past", to_master: "Master", all_masters: "All masters" },
+  hu: { dictate_hint: "Koppintson a telefon billentyűzetén a 🎤-ra és beszéljen — vagy írjon.", voice_lang: "Hang nyelve", today: "Ma", week: "Hét", chats: "Csevegések", report: "Kimutatás", more: "Egyéb", no_bookings: "Nincs foglalás", day_off: "szabadnap",
+    open: "Megnyitás", all: "Mind", new_booking: "Vendég foglalása", block_time: "Idő lezárása", service: "Szolgáltatás", master: "Fodrász",
+    any: "Bárki", date: "Dátum", from: "Ettől", to: "Eddig", whole_day: "Egész nap", client: "Vendég", search: "Név vagy telefonszám…",
+    new_client: "Új vendég", name: "Név", phone: "Telefon", note: "Megjegyzés", times: "Szabad időpontok", no_times: "Erre a napra nincs szabad időpont",
+    next: "Tovább", yes: "✅ Igen, mehet", no: "Nem", cancel: "Foglalás lemondása", resched: "Áthelyezés", noshow: "Nem jött el", write: "Üzenet a vendégnek",
+    call: "Hívás", close: "Bezárás", p_today: "Ma", p_yesterday: "Tegnap", p_week: "7 nap", p_month: "30 nap", visits: "vendég",
+    revenue: "bevétel", planned: "még tervezett", expected: "várható", noshows: "meg nem jelenés", cancelled: "lemondva", by_master: "Fodrászonként",
+    bot: "Bot", by_ai: "AI foglalta", night: "éjjel foglalt", auto: "ember nélkül intézve", cost: "AI, $", speak: "Beszéljen…", thinking: "Gondolkodom…",
+    type: "Írjon az asszisztensnek…", heard: "Ön ezt mondta", notif: "Értesítések", push_on: "Értesítések bekapcsolása ezen a telefonon", push_ok: "Értesítések bekapcsolva",
+    push_ios: "iPhone-on az értesítések akkor működnek, ha az alkalmazás a főképernyőn van: Megosztás → Főképernyőhöz adás.",
+    siri: "Siri és Google", siri_steps: ["Koppintson: „Kulcs létrehozása”.", "iPhone → Parancsok → „+” → nevezze el, pl. „Barber”.",
+      "Műveletek: Szöveg diktálása → URL tartalmának lekérése (lenti cím, POST, fejléc Authorization = Bearer kulcs, JSON-mező text = Diktált szöveg) → Szótárérték lekérése „text” → Szöveg felolvasása.",
+      "Mondja: „Hey Siri, Barber” — és beszéljen. A Siri nem beszél magyarul: a parancs nevét a Siri nyelvén mondja, a kérést diktálhatja magyarul.",
+      "Android: tegye az alkalmazást a főképernyőre, tartsa nyomva az ikont → 🎙 — rögtön hangfelvétellel nyílik."],
+    make_key: "Kulcs létrehozása", key_warn: "Az új kulcs kikapcsolja az előzőt. Ne mutassa meg senkinek.", mcp: "ChatGPT / Claude / Gemini",
+    mcp_steps: ["Hozzon létre kulcsot (fent), és másolja ki a konnektor címét.", "ChatGPT: Beállítások → Apps & Connectors → Create (fejlesztői mód) → illessze be a címet.",
+      "Claude: Beállítások → Connectors → Add custom connector → illessze be a címet.", "Utána kérdezze a saját AI-ját: „mi lesz holnap a szalonban?”"],
+    copy: "Másolás", copied: "Kimásolva", logout: "Kijelentkezés", owner: "Tulajdonos", master_role: "Fodrász", waiting: "választ vár",
+    resume: "Vissza az AI-nak", reply: "Válasz", no_chats: "Az elmúlt 3 napban nem volt csevegés", examples: "Mit mondhat",
+    ex: ["Ki jön ma hozzám?", "Zárd le holnap 14 és 16 között", "Foglald be Andrást hajvágásra pénteken 17-re", "Tedd át Pétert 18 órára", "Eszter nem jött el", "Mennyit kerestünk a héten?"],
+    mic_denied: "Nincs hozzáférés a mikrofonhoz", error: "Hiba történt, próbálja újra",
+    status_noshow: "nem jött el", status_cancelled: "lemondva", ai: "🤖 AI", confirmed: "✅ megerősítve", phone_book: "📞 admin", notes: "Értesítések", no_notes: "Még nincs semmi",
+    auto_listen: "A „Megerősíti?” kérdés után automatikusan figyelje a választ", past: "elmúlt", to_master: "Fodrász", all_masters: "Minden fodrász" },
+  ru: { dictate_hint: "Нажмите 🎤 на клавиатуре телефона и говорите — или напишите.", voice_lang: "Язык голоса", today: "Сегодня", week: "Неделя", chats: "Чаты", report: "Отчёт", more: "Ещё", no_bookings: "Записей нет", day_off: "выходной",
+    open: "Открыть", all: "Все", new_booking: "Записать клиента", block_time: "Закрыть время", service: "Услуга", master: "Мастер",
+    any: "Любой", date: "Дата", from: "С", to: "До", whole_day: "Весь день", client: "Клиент", search: "Имя или телефон…",
+    new_client: "Новый клиент", name: "Имя", phone: "Телефон", note: "Комментарий", times: "Свободное время", no_times: "На этот день свободного времени нет",
+    next: "Далее", yes: "✅ Да, выполнить", no: "Нет", cancel: "Отменить запись", resched: "Перенести", noshow: "Не пришёл", write: "Написать клиенту",
+    call: "Позвонить", close: "Закрыть", p_today: "Сегодня", p_yesterday: "Вчера", p_week: "7 дней", p_month: "30 дней", visits: "визитов",
+    revenue: "выручка", planned: "ещё запланировано", expected: "ожидается", noshows: "неявок", cancelled: "отменено", by_master: "По мастерам",
+    bot: "Бот", by_ai: "записал AI", night: "записались ночью", auto: "без участия человека", cost: "AI, $", speak: "Говорите…", thinking: "Думаю…",
+    type: "Напишите помощнику…", heard: "Вы сказали", notif: "Уведомления", push_on: "Включить уведомления на этом телефоне", push_ok: "Уведомления включены",
+    push_ios: "На iPhone уведомления работают, когда админка добавлена на главный экран: «Поделиться» → «На экран „Домой“».",
+    siri: "Siri и Google", siri_steps: ["Нажмите «Создать ключ».", "iPhone → «Команды» → «+» → назовите, напр., «Барбер».",
+      "Действия: «Диктовать текст» → «Получить содержимое URL» (адрес ниже, POST, заголовок Authorization = Bearer ключ, JSON-поле text = Продиктованный текст) → «Получить значение словаря» text → «Произнести текст».",
+      "Скажите: «Привет, Siri, Барбер» — и просто говорите.", "Android: добавьте админку на главный экран, удерживайте иконку → 🎙 — откроется сразу с записью голоса."],
+    make_key: "Создать ключ", key_warn: "Новый ключ отключает предыдущий. Никому его не показывайте.", mcp: "ChatGPT / Claude / Gemini",
+    mcp_steps: ["Создайте ключ (выше) и скопируйте адрес коннектора.", "ChatGPT: Настройки → Apps & Connectors → Create (режим разработчика) → вставьте адрес.",
+      "Claude: Настройки → Connectors → Add custom connector → вставьте адрес.", "Дальше просто спрашивайте свой AI: «что у меня завтра в салоне?»"],
+    copy: "Копировать", copied: "Скопировано", logout: "Выйти", owner: "Владелец", master_role: "Мастер", waiting: "ждёт ответа",
+    resume: "Вернуть AI", reply: "Ответить", no_chats: "Разговоров за 3 дня нет", examples: "Что можно сказать",
+    ex: ["Кто у меня сегодня?", "Закрой мне завтра с 14 до 16", "Запиши Андраша на стрижку в пятницу в 17", "Перенеси Петра на 18:00", "Елена не пришла", "Сколько мы заработали за неделю?"],
+    mic_denied: "Нет доступа к микрофону", error: "Ошибка, попробуйте ещё раз",
+    status_noshow: "не пришёл", status_cancelled: "отменено", ai: "🤖 AI", confirmed: "✅ подтвердил", phone_book: "📞 админ", notes: "Уведомления", no_notes: "Пока ничего",
+    auto_listen: "После вопроса «Подтверждаете?» слушать ответ автоматически", past: "прошёл", to_master: "К мастеру", all_masters: "Все мастера" },
+  de: { dictate_hint: "Tippen Sie auf der Handy-Tastatur auf 🎤 und sprechen Sie — oder tippen Sie.", voice_lang: "Sprache der Stimme", today: "Heute", week: "Woche", chats: "Chats", report: "Bericht", more: "Mehr", no_bookings: "Keine Termine", day_off: "frei",
+    open: "Freigeben", all: "Alle", new_booking: "Kunden eintragen", block_time: "Zeit sperren", service: "Leistung", master: "Stylist",
+    any: "Egal", date: "Datum", from: "Von", to: "Bis", whole_day: "Ganzer Tag", client: "Kunde", search: "Name oder Telefon…",
+    new_client: "Neuer Kunde", name: "Name", phone: "Telefon", note: "Notiz", times: "Freie Zeiten", no_times: "An diesem Tag ist nichts frei",
+    next: "Weiter", yes: "✅ Ja, ausführen", no: "Nein", cancel: "Termin absagen", resched: "Verschieben", noshow: "Nicht erschienen", write: "Kunden anschreiben",
+    call: "Anrufen", close: "Schließen", p_today: "Heute", p_yesterday: "Gestern", p_week: "7 Tage", p_month: "30 Tage", visits: "Besuche",
+    revenue: "Umsatz", planned: "noch geplant", expected: "erwartet", noshows: "nicht erschienen", cancelled: "abgesagt", by_master: "Nach Stylist",
+    bot: "Bot", by_ai: "von der KI gebucht", night: "nachts gebucht", auto: "ohne Mensch erledigt", cost: "KI, $", speak: "Sprechen Sie…", thinking: "Einen Moment…",
+    type: "An den Assistenten schreiben…", heard: "Sie sagten", notif: "Benachrichtigungen", push_on: "Benachrichtigungen auf diesem Handy einschalten", push_ok: "Benachrichtigungen sind an",
+    push_ios: "Auf dem iPhone funktionieren Benachrichtigungen, wenn die App auf dem Home-Bildschirm ist: Teilen → Zum Home-Bildschirm.",
+    siri: "Siri & Google", siri_steps: ["Tippen Sie auf „Schlüssel erstellen“.", "iPhone → Kurzbefehle → „+“ → Name z. B. „Barber“.",
+      "Aktionen: Text diktieren → Inhalte von URL abrufen (Adresse unten, POST, Header Authorization = Bearer Schlüssel, JSON-Feld text = Diktierter Text) → Wörterbuchwert „text“ → Text sprechen.",
+      "Sagen Sie „Hey Siri, Barber“ und sprechen Sie einfach.", "Android: App zum Startbildschirm hinzufügen, Symbol lange drücken → 🎙 — öffnet sich direkt mit Sprachaufnahme."],
+    make_key: "Schlüssel erstellen", key_warn: "Ein neuer Schlüssel deaktiviert den alten. Geben Sie ihn nicht weiter.", mcp: "ChatGPT / Claude / Gemini",
+    mcp_steps: ["Schlüssel erstellen (oben) und Connector-Adresse kopieren.", "ChatGPT: Einstellungen → Apps & Connectors → Create (Entwicklermodus) → Adresse einfügen.",
+      "Claude: Einstellungen → Connectors → Add custom connector → Adresse einfügen.", "Dann einfach Ihre KI fragen: „Was steht morgen im Salon an?“"],
+    copy: "Kopieren", copied: "Kopiert", logout: "Abmelden", owner: "Inhaber", master_role: "Stylist", waiting: "wartet auf Antwort",
+    resume: "Zurück an die KI", reply: "Antworten", no_chats: "Keine Gespräche in den letzten 3 Tagen", examples: "Was Sie sagen können",
+    ex: ["Wer kommt heute zu mir?", "Sperr mir morgen von 14 bis 16 Uhr", "Trag Andras für Haarschnitt am Freitag um 17 Uhr ein", "Verschieb Peter auf 18 Uhr", "Elena ist nicht gekommen", "Wie viel haben wir diese Woche verdient?"],
+    mic_denied: "Kein Zugriff auf das Mikrofon", error: "Fehler, bitte erneut versuchen",
+    status_noshow: "nicht erschienen", status_cancelled: "abgesagt", ai: "🤖 KI", confirmed: "✅ bestätigt", phone_book: "📞 Admin", notes: "Benachrichtigungen", no_notes: "Noch nichts",
+    auto_listen: "Nach „Bestätigen?“ automatisch auf die Antwort hören", past: "vorbei", to_master: "Stylist", all_masters: "Alle Stylisten" },
+};
+const SPEECH_LANG = { uk: "uk-UA", en: "en-US", hu: "hu-HU", ru: "ru-RU", de: "de-DE" };
+let L = I18N.uk;
+const t = (k) => L[k] ?? I18N.en[k] ?? k;
+
+// ------------------------------------------------------------------ стан і API
+const S = { me: null, tab: "day", date: null, master: "", period: "today", autoListen: true };
+try { S.autoListen = localStorage.getItem("bb_autolisten") !== "0"; } catch (e) { /* приватний режим */ }
+
+async function api(path, data, opts = {}) {
+  const init = { credentials: "same-origin", headers: { "X-Requested-With": "staff" }, cache: "no-store" };
+  if (data !== undefined) {
+    init.method = "POST";
+    if (data instanceof Blob) { init.body = data; init.headers["Content-Type"] = data.type || "audio/webm"; }
+    else { init.body = JSON.stringify(data); init.headers["Content-Type"] = "application/json"; }
+  }
+  const r = await fetch(BASE + "api/" + path, init);
+  if (r.status === 401) { showLoggedOut(); throw new Error("unauthorized"); }
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok && !opts.soft) { toast(body.message || t("error")); throw Object.assign(new Error(body.error || "error"), { body }); }
+  return body;
+}
+
+function toast(text, ms = 2600) {
+  const el = $("toast"); el.textContent = text; el.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => (el.style.display = "none"), ms);
+}
+
+function showLoggedOut() {
+  document.body.innerHTML = `<main style="text-align:center;padding-top:20vh"><p style="font-size:44px">🔒</p>
+    <p>Напишіть боту <b>/app</b> — він надішле посилання для входу.</p><p style="opacity:.7">Send <b>/app</b> to the bot to log in.<br>Írja be a botnak: <b>/app</b></p></main>`;
+}
+
+// ------------------------------------------------------------------ дати
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fromIso = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const shift = (s, days) => { const d = fromIso(s); d.setDate(d.getDate() + days); return iso(d); };
+
+// ------------------------------------------------------------------ каркас
+function renderTabs() {
+  const tabs = [["day", "📅", t("today")], ["week", "🗓", t("week")]];
+  if (S.me.role === "owner") tabs.push(["chats", "💬", t("chats")]);
+  tabs.push(["report", "📊", t("report")], ["more", "⚙️", t("more")]);
+  $("tabs").innerHTML = tabs.map(([id, ic, name]) => `<button data-tab="${id}" class="${S.tab === id ? "on" : ""}"><b>${ic}</b>${esc(name)}</button>`).join("");
+  $("tabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { S.tab = b.dataset.tab; render(); }));
+  $("dateblock").style.display = S.tab === "day" ? "" : "none";
+  $("plus").style.display = ["day", "week"].includes(S.tab) ? "" : "none";
+}
+
+function renderMasterChips() {
+  const box = $("masterchips");
+  if (S.me.role !== "owner" || S.me.masters.length < 2) { box.style.display = "none"; return; }
+  const items = [["", t("all")], ...S.me.masters.map((m) => [m.id, m.name])];
+  box.innerHTML = items.map(([id, name]) => `<button class="chip ${S.master === id ? "on" : ""}" data-m="${esc(id)}">${esc(name)}</button>`).join("");
+  box.querySelectorAll("button").forEach((b) => (b.onclick = () => { S.master = b.dataset.m; render(); }));
+}
+
+async function render() {
+  renderTabs();
+  const main = $("main");
+  try {
+    if (S.tab === "day") await renderDay(main);
+    else if (S.tab === "week") await renderWeek(main);
+    else if (S.tab === "chats") await renderChats(main);
+    else if (S.tab === "report") await renderReport(main);
+    else renderMore(main);
+  } catch (e) { if (e.message !== "unauthorized") main.innerHTML = `<p class="empty">${esc(t("error"))}</p>`; }
+}
+
+// ------------------------------------------------------------------ день
+function badges(b) {
+  const out = [];
+  if (b.status === "no_show") out.push(`<i class="badge red">${esc(t("status_noshow"))}</i>`);
+  if (b.source === "ai") out.push(`<i class="badge gold">${esc(t("ai"))}</i>`);
+  if (b.source === "admin") out.push(`<i class="badge">${esc(t("phone_book"))}</i>`);
+  if (b.confirmed) out.push(`<i class="badge green">${esc(t("confirmed"))}</i>`);
+  if (b.prepay && b.prepay !== "paid") out.push(`<i class="badge red">💳 ${esc(b.prepay)}</i>`);
+  return out.length ? `<div class="badges">${out.join("")}</div>` : "";
+}
+
+function bookingCard(b, showMaster) {
+  const cls = ["card", "bk", b.past ? "past" : "", b.status === "no_show" ? "noshow" : ""].join(" ");
+  return `<button class="${cls}" data-bk="${b.booking_id}">
+    <div><div class="time">${esc(b.time)}</div><div class="end">${esc(b.end)}</div></div>
+    <div><div class="who">${esc(b.client)}</div><div class="what">${esc(b.service)}${showMaster ? " · " + esc(b.master) : ""}</div>
+    ${b.note ? `<div class="what">📝 ${esc(b.note)}</div>` : ""}${badges(b)}</div></button>`;
+}
+
+function blockRow(bl, showMaster) {
+  return `<div class="block"><span>🔒 ${esc(bl.range)}${showMaster ? " · " + esc(bl.master) : ""}${bl.note ? " — " + esc(bl.note) : ""}</span>
+    ${bl.can_open ? `<button class="chip" data-unblock="${bl.block_id}">${esc(t("open"))}</button>` : ""}</div>`;
+}
+
+function bindList(root, bookings) {
+  root.querySelectorAll("[data-bk]").forEach((el) => (el.onclick = () => openBooking(bookings.find((b) => b.booking_id === +el.dataset.bk))));
+  root.querySelectorAll("[data-unblock]").forEach((el) => (el.onclick = () => propose({ kind: "unblock", block_id: +el.dataset.unblock })));
+}
+
+async function renderDay(main) {
+  renderMasterChips();
+  const d = await api(`day?date=${S.date}${S.master ? "&master=" + S.master : ""}`);
+  const day = d.days[0];
+  $("datelabel").textContent = day.day;
+  const multi = S.me.role === "owner" && !S.master && S.me.masters.length > 1;
+  const hours = Object.entries(day.hours).map(([n, h]) => `${n} ${h === "off" ? t("day_off") : h}`).join(" · ");
+  let html = `<p class="hours">${esc(hours)}</p>`;
+  html += day.blocks.map((bl) => blockRow(bl, multi)).join("");
+  html += day.bookings.length ? day.bookings.map((b) => bookingCard(b, multi)).join("") : `<p class="empty">${esc(t("no_bookings"))}</p>`;
+  main.innerHTML = html;
+  bindList(main, day.bookings);
+}
+
+async function renderWeek(main) {
+  const d = await api(`week?date=${S.me.today}${S.master ? "&master=" + S.master : ""}`);
+  const multi = S.me.role === "owner" && !S.master && S.me.masters.length > 1;
+  const all = [];
+  main.innerHTML = d.days.map((day) => {
+    all.push(...day.bookings);
+    const active = day.bookings.filter((b) => b.status === "active").length;
+    return `<div class="dayhead">${esc(day.day)}<small>${active}</small></div>` +
+      day.blocks.map((bl) => blockRow(bl, multi)).join("") + day.bookings.map((b) => bookingCard(b, multi)).join("");
+  }).join("");
+  bindList(main, all);
+}
+
+// ------------------------------------------------------------------ шторка
+function openSheet(html) {
+  $("sheetbody").innerHTML = html;
+  $("sheetbg").style.display = "block";
+  requestAnimationFrame(() => $("sheet").classList.add("open"));
+}
+function closeSheet() {
+  $("sheet").classList.remove("open"); $("sheetbg").style.display = "none";
+  stopSpeaking();
+  if (V.rec) V.rec.abort();
+}
+$("sheetbg").onclick = closeSheet;
+
+function openBooking(b) {
+  const owner = S.me.role === "owner";
+  const today = S.me.today;
+  const acts = [];
+  if (b.phone) acts.push(`<a class="btn" href="tel:${esc(b.phone)}">📞 ${esc(t("call"))} ${esc(b.phone)}</a>`);
+  if (b.status === "active" && b.date <= today) acts.push(`<button class="btn" data-a="noshow">🚫 ${esc(t("noshow"))}</button>`);
+  if (owner && b.status === "active" && !b.past) {
+    acts.push(`<button class="btn" data-a="resched">🔁 ${esc(t("resched"))}</button>`);
+    acts.push(`<button class="btn red" data-a="cancel">❌ ${esc(t("cancel"))}</button>`);
+  }
+  if (owner && b.in_chat) acts.push(`<button class="btn" data-a="write">✉️ ${esc(t("write"))}</button>`);
+  openSheet(`<h3>${esc(b.time)}–${esc(b.end)} · ${esc(b.client)}</h3>
+    <p class="sub">${esc(b.day)}\n${esc(b.service)} · ${esc(b.master)} · ${esc(b.price)}${b.note ? "\n📝 " + esc(b.note) : ""}</p>
+    ${badges(b)}${acts.join("")}<button class="btn" onclick="closeSheet()">${esc(t("close"))}</button>`);
+  const body = $("sheetbody");
+  body.querySelectorAll("[data-a]").forEach((el) => (el.onclick = () => {
+    const a = el.dataset.a;
+    if (a === "noshow") propose({ kind: "no_show", booking_id: b.booking_id });
+    if (a === "cancel") propose({ kind: "cancel", booking_id: b.booking_id });
+    if (a === "resched") formResched(b);
+    if (a === "write") formMessage(b.client_id, b.client);
+  }));
+}
+
+// ------------------------------------------------------------------ підтвердження дій
+async function propose(data) {
+  const plan = await api("propose", data);
+  showConfirm(plan);
+}
+
+function showConfirm(plan, intro) {
+  openSheet(`${intro ? `<div class="reply">${esc(intro)}</div>` : ""}<div class="summary">${esc(plan.summary)}</div>
+    <button class="btn gold" id="cyes">${esc(t("yes"))}</button><button class="btn" id="cno">${esc(t("no"))}</button>`);
+  $("cyes").onclick = async () => {
+    $("cyes").disabled = true;
+    const r = await api("confirm", { action_id: plan.action_id }).catch(() => null);
+    closeSheet();
+    if (r) { toast(r.text); render(); }
+  };
+  $("cno").onclick = async () => { await api("decline", { action_id: plan.action_id }); closeSheet(); };
+}
+
+// ------------------------------------------------------------------ форми
+function opts(items, selected) {
+  return items.map(([v, n]) => `<option value="${esc(v)}" ${v === selected ? "selected" : ""}>${esc(n)}</option>`).join("");
+}
+
+function masterOptions(serviceId, withAny) {
+  const ms = S.me.masters.filter((m) => !serviceId || m.services.includes(serviceId));
+  return (withAny ? [["any", t("any")]] : []).concat(ms.map((m) => [m.id, m.name]));
+}
+
+async function loadSlots(box, service, date, master, pick) {
+  box.innerHTML = "…";
+  const d = await api(`slots?service=${encodeURIComponent(service)}&date=${date}${master && master !== "any" ? "&master=" + master : ""}`);
+  const times = Object.keys(d.times);
+  box.innerHTML = times.length ? times.map((tm) => `<button class="chip" data-t="${tm}">${tm}</button>`).join("") : `<span class="sub">${esc(t("no_times"))}</span>`;
+  box.querySelectorAll("[data-t]").forEach((el) => (el.onclick = () => {
+    box.querySelectorAll(".chip").forEach((c) => c.classList.remove("on")); el.classList.add("on"); pick(el.dataset.t);
+  }));
+}
+
+function formBook() {
+  const owner = S.me.role === "owner";
+  const services = S.me.services.map((s) => [s.id, `${s.title} · ${s.duration}′ · ${s.price}`]);
+  openSheet(`<h3>${esc(t("new_booking"))}</h3>
+    <label class="f">${esc(t("service"))}</label><select class="f" id="fsvc">${opts(services)}</select>
+    ${owner ? `<label class="f">${esc(t("master"))}</label><select class="f" id="fmst"></select>` : ""}
+    <label class="f">${esc(t("date"))}</label><input class="f" type="date" id="fdate" value="${S.date}" min="${S.me.today}">
+    <label class="f">${esc(t("times"))}</label><div class="slots" id="fslots"></div>
+    <label class="f">${esc(t("client"))}</label><input class="f" id="fq" placeholder="${esc(t("search"))}" autocomplete="off">
+    <div id="fclients"></div>
+    <div class="row"><div><label class="f">${esc(t("name"))}</label><input class="f" id="fname"></div>
+    <div><label class="f">${esc(t("phone"))}</label><input class="f" id="fphone" type="tel"></div></div>
+    <label class="f">${esc(t("note"))}</label><input class="f" id="fnote">
+    <button class="btn gold" id="fgo" disabled>${esc(t("next"))}</button>`);
+  let time = "", clientId = null;
+  const go = $("fgo");
+  const refresh = () => {
+    time = ""; go.disabled = true;
+    const svc = $("fsvc").value;
+    if (owner) { const cur = $("fmst").value || "any"; $("fmst").innerHTML = opts(masterOptions(svc, true), cur); }
+    loadSlots($("fslots"), svc, $("fdate").value, owner ? $("fmst").value : "", (tm) => { time = tm; go.disabled = false; });
+  };
+  $("fsvc").onchange = refresh; $("fdate").onchange = refresh; if (owner) $("fmst").onchange = refresh;
+  refresh();
+  let timer;
+  $("fq").oninput = () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = $("fq").value.trim();
+      if (q.length < 2) { $("fclients").innerHTML = ""; return; }
+      const d = await api("clients?q=" + encodeURIComponent(q));
+      $("fclients").innerHTML = `<div class="chips" style="flex-wrap:wrap">${d.clients.map((c) => `<button class="chip" data-c="${c.client_id}" data-n="${esc(c.name)}" data-p="${esc(c.phone)}">${esc(c.name)} ${esc(c.phone)}</button>`).join("")}</div>`;
+      $("fclients").querySelectorAll("[data-c]").forEach((el) => (el.onclick = () => {
+        clientId = +el.dataset.c; $("fname").value = el.dataset.n; $("fphone").value = el.dataset.p;
+        $("fclients").querySelectorAll(".chip").forEach((c) => c.classList.remove("on")); el.classList.add("on");
+      }));
+    }, 250);
+  };
+  $("fname").oninput = () => (clientId = null);
+  go.onclick = () => propose({ kind: "book", service_id: $("fsvc").value, master_id: owner ? $("fmst").value : S.me.master_id,
+    date: $("fdate").value, time, client_id: clientId, client_name: $("fname").value, client_phone: $("fphone").value, note: $("fnote").value });
+}
+
+function formBlock() {
+  const owner = S.me.role === "owner";
+  const masters = [...(owner ? [["all", t("all_masters")]] : []), ...S.me.masters.filter((m) => owner || m.id === S.me.master_id).map((m) => [m.id, m.name])];
+  openSheet(`<h3>${esc(t("block_time"))}</h3>
+    ${owner ? `<label class="f">${esc(t("master"))}</label><select class="f" id="bmst">${opts(masters, S.master || S.me.master_id || (S.me.masters[0] || {}).id)}</select>` : ""}
+    <label class="f">${esc(t("date"))}</label><input class="f" type="date" id="bdate" value="${S.date}" min="${S.me.today}">
+    <label class="f"><input type="checkbox" id="bwhole"> ${esc(t("whole_day"))}</label>
+    <div class="row" id="brange"><div><label class="f">${esc(t("from"))}</label><input class="f" type="time" id="bfrom" value="13:00" step="900"></div>
+    <div><label class="f">${esc(t("to"))}</label><input class="f" type="time" id="bto" value="14:00" step="900"></div></div>
+    <label class="f">${esc(t("note"))}</label><input class="f" id="bnote">
+    <button class="btn gold" id="bgo">${esc(t("next"))}</button>`);
+  $("bwhole").onchange = () => ($("brange").style.display = $("bwhole").checked ? "none" : "");
+  $("bgo").onclick = () => {
+    const whole = $("bwhole").checked;
+    propose({ kind: "block", master_id: owner ? $("bmst").value : S.me.master_id, date: $("bdate").value,
+      time_from: whole ? "" : $("bfrom").value, time_to: whole ? "" : $("bto").value, note: $("bnote").value });
+  };
+}
+
+function formResched(b) {
+  openSheet(`<h3>🔁 ${esc(t("resched"))}: ${esc(b.client)}</h3><p class="sub">${esc(b.day)} ${esc(b.time)} · ${esc(b.service)}</p>
+    <label class="f">${esc(t("to_master"))}</label><select class="f" id="rmst">${opts(masterOptions(b.service_id, false), b.master_id)}</select>
+    <label class="f">${esc(t("date"))}</label><input class="f" type="date" id="rdate" value="${b.date < S.me.today ? S.me.today : b.date}" min="${S.me.today}">
+    <label class="f">${esc(t("times"))}</label><div class="slots" id="rslots"></div>
+    <button class="btn gold" id="rgo" disabled>${esc(t("next"))}</button>`);
+  let time = "";
+  const refresh = () => { time = ""; $("rgo").disabled = true; loadSlots($("rslots"), b.service_id, $("rdate").value, $("rmst").value, (tm) => { time = tm; $("rgo").disabled = false; }); };
+  $("rdate").onchange = refresh; $("rmst").onchange = refresh; refresh();
+  $("rgo").onclick = () => propose({ kind: "reschedule", booking_id: b.booking_id, date: $("rdate").value, time, master_id: $("rmst").value });
+}
+
+function formMessage(clientId, name) {
+  openSheet(`<h3>✉️ ${esc(name)}</h3><textarea class="f" id="mtext"></textarea><button class="btn gold" id="mgo">${esc(t("next"))}</button>`);
+  $("mgo").onclick = () => propose({ kind: "message", client_id: clientId, text: $("mtext").value });
+}
+
+$("plus").onclick = () => {
+  openSheet(`<button class="btn gold" id="pb">🆕 ${esc(t("new_booking"))}</button><button class="btn" id="pl">🔒 ${esc(t("block_time"))}</button>`);
+  $("pb").onclick = formBook;
+  $("pl").onclick = formBlock;
+};
+
+// ------------------------------------------------------------------ чати
+async function renderChats(main) {
+  const d = await api("chats");
+  if (!d.chats.length) { main.innerHTML = `<p class="empty">${esc(t("no_chats"))}</p>`; return; }
+  main.innerHTML = d.chats.map((c, i) => {
+    const last = c.messages[c.messages.length - 1] || {};
+    return `<button class="card chatrow" data-i="${i}"><div><div class="nm">${esc(c.name)} ${c.waiting_for_human ? `<i class="badge red">${esc(t("waiting"))}</i>` : ""}</div>
+      <div class="lt">${esc(last.text)}</div></div><small class="badge">${esc(c.channel)}</small></button>`;
+  }).join("");
+  main.querySelectorAll("[data-i]").forEach((el) => (el.onclick = () => openChat(d.chats[+el.dataset.i])));
+}
+
+function openChat(c) {
+  openSheet(`<h3>${esc(c.name)} ${c.phone ? `<small class="sub">${esc(c.phone)}</small>` : ""}</h3>
+    ${c.messages.map((m) => `<div class="bubble ${m.from}"><small>${esc(m.at.slice(11))}</small>${esc(m.text)}</div>`).join("")}
+    <textarea class="f" id="ctext" placeholder="${esc(t("reply"))}…" style="margin-top:12px"></textarea>
+    <button class="btn gold" id="csend">${esc(t("reply"))}</button>
+    ${c.waiting_for_human ? `<button class="btn" id="cresume">🤖 ${esc(t("resume"))}</button>` : ""}`);
+  $("csend").onclick = () => propose({ kind: "message", client_id: c.client_id, text: $("ctext").value });
+  if ($("cresume")) $("cresume").onclick = async () => { await api("resume", { client_id: c.client_id }); closeSheet(); render(); };
+}
+
+// ------------------------------------------------------------------ звіт
+async function renderReport(main) {
+  const r = await api("report?period=" + S.period);
+  const periods = [["today", t("p_today")], ["yesterday", t("p_yesterday")], ["week", t("p_week")], ["month", t("p_month")]];
+  let html = `<div class="chips">${periods.map(([p, n]) => `<button class="chip ${S.period === p ? "on" : ""}" data-p="${p}">${esc(n)}</button>`).join("")}</div>
+    <div class="grid" style="margin-top:12px">
+      <div class="stat"><b>${r.visits_done}</b><span>${esc(t("visits"))}</span></div>
+      <div class="stat"><b>${esc(r.revenue)}</b><span>${esc(t("revenue"))}</span></div>
+      <div class="stat"><b>${r.still_planned}</b><span>${esc(t("planned"))} · ${esc(r.expected)}</span></div>
+      <div class="stat"><b>${r.no_shows} / ${r.cancelled}</b><span>${esc(t("noshows"))} / ${esc(t("cancelled"))}</span></div></div>`;
+  if (r.by_master.length) html += `<div class="dayhead">${esc(t("by_master"))}</div><ul class="list card">${r.by_master.map((m) => `<li><span>${esc(m.master)}</span><span>${m.visits} · ${esc(m.revenue)}</span></li>`).join("")}</ul>`;
+  if (r.bot) html += `<div class="dayhead">${esc(t("bot"))}</div><div class="grid">
+      <div class="stat"><b>${r.bot.by_ai}</b><span>${esc(t("by_ai"))}</span></div><div class="stat"><b>${r.bot.at_night}</b><span>${esc(t("night"))}</span></div>
+      <div class="stat"><b>${esc(r.bot.handled_without_human)}</b><span>${esc(t("auto"))}</span></div><div class="stat"><b>${esc(r.bot.ai_cost_usd)}</b><span>${esc(t("cost"))}</span></div></div>`;
+  main.innerHTML = html;
+  main.querySelectorAll("[data-p]").forEach((el) => (el.onclick = () => { S.period = el.dataset.p; render(); }));
+}
+
+// ------------------------------------------------------------------ ще: сповіщення, Siri, MCP
+function renderMore(main) {
+  const me = S.me;
+  main.innerHTML = `<div class="card"><b>${esc(me.name || "")}</b><div class="sub">${esc(me.role === "owner" ? t("owner") : t("master_role"))} · ${esc(me.shop)}</div></div>
+    <div class="card"><b>🔔 ${esc(t("notif"))}</b><button class="btn gold" id="push">${esc(t("push_on"))}</button><p class="sub" id="pushhint"></p></div>
+    <div class="card"><b>🎙 ${esc(t("examples"))}</b><ul class="ex">${t("ex").map((e) => `<li>«${esc(e)}»</li>`).join("")}</ul>
+      <label class="f"><input type="checkbox" id="autol" ${S.autoListen ? "checked" : ""}> ${esc(t("auto_listen"))}</label></div>
+    <div class="card"><b>🗣 ${esc(t("siri"))}</b><ol class="steps">${t("siri_steps").map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+      <button class="btn" id="mkkey">🔑 ${esc(t("make_key"))}</button><div id="keybox"></div></div>
+    <div class="card"><b>🤖 ${esc(t("mcp"))}</b><ol class="steps">${t("mcp_steps").map((s) => `<li>${esc(s)}</li>`).join("")}</ol><div id="mcpbox"></div></div>
+    <button class="btn red" id="logout">${esc(t("logout"))}</button>`;
+  $("autol").onchange = (e) => { S.autoListen = e.target.checked; try { localStorage.setItem("bb_autolisten", S.autoListen ? "1" : "0"); } catch (x) { /* */ } };
+  $("push").onclick = enablePush;
+  const ios = /iphone|ipad/i.test(navigator.userAgent) && !navigator.standalone;
+  if (ios) $("pushhint").textContent = t("push_ios");
+  $("mkkey").onclick = async () => {
+    const k = await api("key", {});
+    const copyBtn = (v) => `<button class="btn" data-copy="${esc(v)}">${esc(t("copy"))}</button>`;
+    $("keybox").innerHTML = `<p class="sub">${esc(t("key_warn"))}</p><label class="f">URL</label><div class="mono">${esc(k.ask_url)}</div>${copyBtn(k.ask_url)}
+      <label class="f">Authorization</label><div class="mono">Bearer ${esc(k.key)}</div>${copyBtn("Bearer " + k.key)}`;
+    $("mcpbox").innerHTML = `<label class="f">MCP URL</label><div class="mono">${esc(k.mcp_url)}</div>${copyBtn(k.mcp_url)}`;
+    document.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => navigator.clipboard.writeText(b.dataset.copy).then(() => toast(t("copied")))));
+  };
+  $("logout").onclick = async () => { await api("logout", {}); showLoggedOut(); };
+}
+
+async function enablePush() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) { toast(t("push_ios"), 6000); return; }
+    const reg = await navigator.serviceWorker.register(BASE + "sw.js", { scope: BASE });
+    await navigator.serviceWorker.ready;
+    if ((await Notification.requestPermission()) !== "granted") return;
+    const key = Uint8Array.from(atob(S.me.push_key.replace(/-/g, "+").replace(/_/g, "/") + "==".slice(0, (4 - S.me.push_key.length % 4) % 4)), (c) => c.charCodeAt(0));
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+    await api("push", { endpoint: sub.endpoint });
+    toast(t("push_ok"));
+  } catch (e) { toast(t("error")); }
+}
+
+async function openNotes() {
+  const d = await api("notes");
+  try { localStorage.setItem("bb_seen", String(d.notes.length ? d.notes[d.notes.length - 1].id : "")); } catch (e) { /* */ }
+  $("belldot").hidden = true;
+  openSheet(`<h3>${esc(t("notes"))}</h3>` + (d.notes.length ? d.notes.slice().reverse().map((n) =>
+    `<div class="card"><small class="sub">${esc(n.at)}</small><div><b>${esc(n.title)}</b></div><div class="sub" style="margin:0">${esc(n.body)}</div></div>`).join("")
+    : `<p class="empty">${esc(t("no_notes"))}</p>`));
+}
+$("bell").onclick = openNotes;
+async function checkNotes() {
+  try {
+    const d = await api("notes", undefined, { soft: true });
+    const last = d.notes && d.notes.length ? d.notes[d.notes.length - 1].id : "";
+    let seen = ""; try { seen = localStorage.getItem("bb_seen") || ""; } catch (e) { /* */ }
+    $("belldot").hidden = !last || last === seen;
+  } catch (e) { /* */ }
+}
+
+// ------------------------------------------------------------------ голос
+// Голос розпізнає сам телефон — безкоштовно: SpeechRecognition браузера (на iPhone — Siri, на Android — Google).
+// Де його немає — поле вводу: 🎤 на клавіатурі телефону теж надиктує текст. На сервер іде лише текст.
+const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const V = { rec: null, busy: false };
+const VOICE_LANGS = ["uk", "hu", "en", "ru", "de"];
+
+function voiceLang() {
+  try { return localStorage.getItem("bb_vlang") || S.me.lang; } catch (e) { return S.me.lang; }
+}
+
+function stopSpeaking() { try { speechSynthesis.cancel(); } catch (e) { /* */ } }
+
+function speak(text, then) {
+  if (!text || !("speechSynthesis" in window)) { if (then) then(); return; }
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = SPEECH_LANG[voiceLang()] || "en-US";
+  const voice = speechSynthesis.getVoices().find((v) => v.lang && v.lang.toLowerCase().startsWith(u.lang.slice(0, 2)));
+  if (voice) u.voice = voice;
+  u.onend = () => then && then();
+  u.onerror = () => then && then();
+  stopSpeaking(); speechSynthesis.speak(u);
+}
+
+function setMic(state) {
+  $("mic").classList.toggle("rec", state === "rec");
+  $("mic").classList.toggle("wait", state === "wait");
+  $("mic").textContent = state === "rec" ? "■" : "🎙";
+}
+
+// quick — коротке слухання після «Підтверджуєте?»: тиша — просто закриваємо.
+function startListening(quick) {
+  if (V.rec || V.busy) return;
+  stopSpeaking();
+  if (!Rec) { assistantSheet(t("dictate_hint")); setTimeout(() => $("asktext") && $("asktext").focus(), 300); return; }
+  const rec = new Rec();
+  rec.lang = SPEECH_LANG[voiceLang()] || "uk-UA";
+  rec.interimResults = true;
+  rec.continuous = false;
+  let final = "", interim = "";
+  V.rec = rec;
+  setMic("rec");
+  if (!quick) assistantSheet(t("speak"));
+  rec.onresult = (e) => {
+    interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
+    }
+    const live = $("live"); if (live) live.textContent = final + interim;
+  };
+  rec.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") toast(t("mic_denied")); };
+  rec.onend = () => {
+    V.rec = null; setMic("");
+    const text = (final || interim).trim();
+    if (text) askText(text);
+    else if (!quick) assistantSheet(t("dictate_hint"));
+  };
+  try { rec.start(); } catch (e) { V.rec = null; setMic(""); assistantSheet(t("dictate_hint")); }
+}
+
+function stopListening() { if (V.rec) V.rec.stop(); }
+
+async function askText(text) {
+  V.busy = true; setMic("wait");
+  assistantSheet(t("thinking"), text);
+  try { showAnswer({ ...(await api("ask", { text })), heard: text }); }
+  catch (e) { assistantSheet(t("error")); }
+  finally { V.busy = false; setMic(""); }
+}
+
+function askBox() {
+  const cur = voiceLang();
+  return `<div class="ask"><input class="f" id="asktext" placeholder="${esc(t("type"))}" enterkeyhint="send"><button id="asksend">➤</button></div>
+    <div class="chips"><span class="sub" style="margin:6px 4px 0 0">${esc(t("voice_lang"))}:</span>${VOICE_LANGS.map((l) =>
+      `<button class="chip ${l === cur ? "on" : ""}" data-vl="${l}">${l.toUpperCase()}</button>`).join("")}</div>`;
+}
+
+function bindAskBox() {
+  const send = () => { const text = $("asktext").value.trim(); if (text) { stopListening(); askText(text); } };
+  $("asksend").onclick = send;
+  $("asktext").onkeydown = (e) => { if (e.key === "Enter") send(); };
+  document.querySelectorAll("[data-vl]").forEach((b) => (b.onclick = () => {
+    try { localStorage.setItem("bb_vlang", b.dataset.vl); } catch (e) { /* */ }
+    document.querySelectorAll("[data-vl]").forEach((x) => x.classList.toggle("on", x === b));
+  }));
+}
+
+function assistantSheet(status, heard) {
+  openSheet(`${heard ? `<div class="heard">«${esc(heard)}»</div>` : ""}<div class="reply">${esc(status || "")}</div>
+    <div class="reply" id="live" style="color:var(--gold)"></div>${askBox()}`);
+  bindAskBox();
+}
+
+function showAnswer(r) {
+  const heard = r.heard ? `<div class="heard">${esc(t("heard"))}: «${esc(r.heard)}»</div>` : "";
+  if (r.action) {
+    openSheet(`${heard}<div class="reply">${esc(r.text)}</div><div class="summary">${esc(r.action.summary)}</div>
+      <div class="reply" id="live" style="color:var(--gold)"></div>
+      <button class="btn gold" id="cyes">${esc(t("yes"))}</button><button class="btn" id="cno">${esc(t("no"))}</button>`);
+    $("cyes").onclick = async () => { stopListening(); showAnswer(await api("confirm", { action_id: r.action.action_id })); };
+    $("cno").onclick = async () => { stopListening(); await api("decline", { action_id: r.action.action_id }); closeSheet(); };
+    speak(r.text, () => { if (S.autoListen && $("cyes")) startListening(true); });
+    return;
+  }
+  openSheet(`${heard}<div class="reply">${esc(r.text)}</div>${askBox()}`);
+  bindAskBox();
+  speak(r.text);
+  if (r.done) render();
+}
+
+$("mic").onclick = () => (V.rec ? stopListening() : startListening(false));
+
+// ------------------------------------------------------------------ дата
+$("prev").onclick = () => { S.date = shift(S.date, -1); render(); };
+$("next").onclick = () => { S.date = shift(S.date, 1); render(); };
+$("datelabel").onclick = () => { const p = $("datepick"); p.value = S.date; if (p.showPicker) p.showPicker(); else p.click(); };
+$("datepick").onchange = (e) => { if (e.target.value) { S.date = e.target.value; render(); } };
+
+// ------------------------------------------------------------------ старт
+(async function init() {
+  try { S.me = await api("me"); } catch (e) { return; }
+  L = I18N[S.me.lang] || I18N.en;
+  document.documentElement.lang = S.me.lang;
+  document.title = S.me.shop;
+  $("shop").textContent = S.me.shop;
+  S.date = S.me.today;
+  if (S.me.role === "owner" && S.me.master_id && S.me.masters.length > 1) S.master = "";
+  render();
+  checkNotes(); setInterval(checkNotes, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { render(); checkNotes(); } });
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register(BASE + "sw.js", { scope: BASE }).catch(() => {});
+    navigator.serviceWorker.addEventListener("message", () => { render(); checkNotes(); });
+  }
+  if (S.me.pending) showConfirm(S.me.pending);
+  if (location.hash === "#voice") { history.replaceState(null, "", location.pathname); startListening(false); }
+})();
+</script>
+</body>
+</html>

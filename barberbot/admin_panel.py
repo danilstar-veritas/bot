@@ -242,18 +242,58 @@ class AdminPanel:
                                           old=old_text, who=Raw(ctx.at("adm_resched_offline" if offline
                                                                        else "adm_resched_notified"))))
         await self.notify_master_resched(tenant, old, new)
-        if client and not offline and not client["blocked"]:
-            lang = client["lang"] or tenant.lang
-            moved = old["master_id"] != new["master_id"]
-            names = tenant.booking_names(new, lang)
-            await self.send(tenant, client["tg_id"], tenant.t(
-                lang, "client_rescheduled_by_admin", **names,
-                old=f"{tenant.day_label(parse_dt(old['start_at']).date(), lang)}, {old['start_at'][11:16]}"
-                    + (f" · {tenant.booking_names(old, lang)['master']}" if moved else ""),
-                new=f"{tenant.day_label(start.date(), lang)}, {fmt_hhmm(start)}"
-                    + (f" · {names['master']}" if moved else "")), tag="event")
-            add_note(ctx.db, tenant, client["id"], f"Адміністратор переніс запис №{new['id']} на "
-                     f"{start:%d.%m.%Y} о {fmt_hhmm(start)} ({new['master_name']}).", self.settings)
+        await self.tell_client_rescheduled(tenant, old, new)
+
+    # ================================================================ клієнту — про дії адміністратора
+    # Спільне для кнопок адмінки й помічника персоналу (staff.py). Повертають, чи клієнт отримав повідомлення.
+    def _reachable(self, client) -> bool:
+        return client is not None and client["tg_id"] > 0 and not client["blocked"]
+
+    async def tell_client_rescheduled(self, tenant, old, new) -> bool:
+        client = self.db.get_client(new["client_id"])
+        if not self._reachable(client):
+            return False
+        lang = client["lang"] or tenant.lang
+        start = parse_dt(new["start_at"])
+        moved = old["master_id"] != new["master_id"]
+        names = tenant.booking_names(new, lang)
+        sent = await self.send(tenant, client["tg_id"], tenant.t(
+            lang, "client_rescheduled_by_admin", **names,
+            old=f"{tenant.day_label(parse_dt(old['start_at']).date(), lang)}, {old['start_at'][11:16]}"
+                + (f" · {tenant.booking_names(old, lang)['master']}" if moved else ""),
+            new=f"{tenant.day_label(start.date(), lang)}, {fmt_hhmm(start)}"
+                + (f" · {names['master']}" if moved else "")), tag="event")
+        add_note(self.db, tenant, client["id"], f"Адміністратор переніс запис №{new['id']} на "
+                 f"{start:%d.%m.%Y} о {fmt_hhmm(start)} ({new['master_name']}).", self.settings)
+        return sent is not None
+
+    async def tell_client_cancelled(self, tenant, b) -> bool:
+        client = self.db.get_client(b["client_id"])
+        if not self._reachable(client):
+            return False
+        lang = client["lang"] or tenant.lang
+        start = parse_dt(b["start_at"])
+        sent = await self.send(tenant, client["tg_id"], tenant.t(
+            lang, "client_cancelled_by_admin", **tenant.booking_names(b, lang),
+            day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start)), tag="event")
+        add_note(self.db, tenant, client["id"], f"Адміністратор скасував запис №{b['id']}.", self.settings)
+        return sent is not None
+
+    async def tell_client_booked(self, tenant, b) -> bool:
+        client = self.db.get_client(b["client_id"])
+        if not self._reachable(client):
+            return False
+        lang = client["lang"] or tenant.lang
+        start = parse_dt(b["start_at"])
+        sent = await self.send(tenant, client["tg_id"], tenant.t(
+            lang, "client_booked_by_admin", **tenant.booking_names(b, lang),
+            day=tenant.day_label(start.date(), lang), time=fmt_hhmm(start),
+            price=tenant.price_str(b["price"])), tag="event")
+        if sent is None:
+            return False
+        add_note(self.db, tenant, client["id"], f"Адміністратор записав клієнта: запис №{b['id']}, "
+                 f"{b['service_title']}, {b['master_name']}, {start:%d.%m.%Y} о {fmt_hhmm(start)}.", self.settings)
+        return True
 
     # ================================================================ клієнти
     async def admin_find(self, ctx: Ctx, query: str) -> None:

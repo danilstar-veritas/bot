@@ -1,7 +1,8 @@
 """Маленький HTTP-сервер бота на стандартній бібліотеці.
 
 Слухає 127.0.0.1 (порт [web] port / [meta] webhook_port), а назовні його з HTTPS відкриває Caddy.
-Маршрути: /meta/webhook — вебхук Instagram/Messenger, /app/<заклад>/… — міні-застосунок запису, /health.
+Маршрути: /meta/webhook — вебхук Instagram/Messenger, /app/<заклад>/… — міні-застосунок запису,
+/staff/<заклад>/… — адмінка персоналу (PWA), /mcp/<заклад>/<ключ> — MCP-сервер, /health.
 """
 
 from __future__ import annotations
@@ -12,8 +13,9 @@ import urllib.parse
 
 log = logging.getLogger("barberbot.web")
 
-REASONS = {200: "OK", 301: "Moved Permanently", 400: "Bad Request", 403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed",
-           409: "Conflict", 413: "Payload Too Large", 429: "Too Many Requests", 500: "Internal Server Error"}
+REASONS = {200: "OK", 202: "Accepted", 301: "Moved Permanently", 303: "See Other", 400: "Bad Request",
+           401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed", 409: "Conflict",
+           413: "Payload Too Large", 429: "Too Many Requests", 500: "Internal Server Error"}
 
 
 class Response:
@@ -28,16 +30,18 @@ class Response:
 class WebServer:
     MAX_BODY = 1 << 20
 
-    def __init__(self, settings, meta_hook=None, webapp=None):
+    def __init__(self, settings, meta_hook=None, webapp=None, staff_web=None):
         self.meta_hook = meta_hook
         self.webapp = webapp
+        self.staff_web = staff_web
         self.host, self.port = settings.meta_webhook_host, settings.meta_webhook_port
         self.server: asyncio.base_events.Server | None = None
 
     async def start(self) -> None:
         self.server = await asyncio.start_server(self.on_connection, self.host, self.port)
         parts = [p for p, on in (("вебхук Instagram/Messenger /meta/webhook", self.meta_hook),
-                                 ("онлайн-запис /app/", self.webapp)) if on]
+                                 ("онлайн-запис /app/", self.webapp),
+                                 ("адмінка /staff/ і MCP /mcp/", self.staff_web)) if on]
         log.info("HTTP-сервер слухає %s:%s — %s", self.host, self.port, ", ".join(parts))
 
     async def stop(self) -> None:
@@ -54,6 +58,8 @@ class WebServer:
             return Response(status, text)
         if path.startswith("/app/") and self.webapp:
             return await self.webapp.handle(method, target, headers, body)
+        if path.startswith(("/staff/", "/mcp/")) and self.staff_web:
+            return await self.staff_web.handle(method, target, headers, body)
         return Response(404, "not found")
 
     async def on_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
