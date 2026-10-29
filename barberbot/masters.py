@@ -92,30 +92,37 @@ class MasterPanel:
                 buttons.append(ibtn(ctx.at("btn_adm_master_invite", name=m.name), f"aMi:{m.id}"))
         await ctx.show(message_id, ctx.at("adm_masters", items=Raw(items)), inline_kb(_rows(buttons, 1)))
 
+    async def master_invite_link(self, tenant: Tenant, master_id: str) -> str:
+        """Нове одноразове посилання-запрошення для майстра; "" — не вдалося дізнатися адресу бота."""
+        username = await self.bot_username(tenant)
+        if not username:
+            return ""
+        # Попередні невикористані запрошення цього майстра більше не діють.
+        for key, raw in self.db.kv_prefix(tenant.slug, "master_invite:").items():
+            try:
+                if json.loads(raw)["master"] == master_id:
+                    self.db.kv_delete(tenant.slug, key)
+            except (ValueError, KeyError, TypeError):
+                self.db.kv_delete(tenant.slug, key)
+        code = secrets.token_urlsafe(12)
+        until = tenant.now() + timedelta(hours=INVITE_HOURS)
+        self.db.kv_set(tenant.slug, f"master_invite:{code}",
+                       json.dumps({"master": master_id, "until": until.isoformat()}))
+        link = f"https://t.me/{username}?start=m{code}"
+        router = self.meta_routers.get(tenant.slug)
+        if router is not None:  # майстер без Telegram підключиться через Messenger
+            link += f"\n\nMessenger: https://m.me/{router.channel.page_id}?ref=m{code}"
+        return link
+
     async def admin_master_invite(self, ctx: Ctx, master_id: str) -> None:
         tenant = ctx.tenant
         master = tenant.masters.get(master_id)
         if master is None:
             raise Expired()
-        username = await self.bot_username(tenant)
-        if not username:
+        link = await self.master_invite_link(tenant, master_id)
+        if not link:
             await ctx.send(ctx.at("adm_master_no_username"))
             return
-        # Попередні невикористані запрошення цього майстра більше не діють.
-        for key, raw in ctx.db.kv_prefix(tenant.slug, "master_invite:").items():
-            try:
-                if json.loads(raw)["master"] == master_id:
-                    ctx.db.kv_delete(tenant.slug, key)
-            except (ValueError, KeyError, TypeError):
-                ctx.db.kv_delete(tenant.slug, key)
-        code = secrets.token_urlsafe(12)
-        until = tenant.now() + timedelta(hours=INVITE_HOURS)
-        ctx.db.kv_set(tenant.slug, f"master_invite:{code}",
-                      json.dumps({"master": master_id, "until": until.isoformat()}))
-        link = f"https://t.me/{username}?start=m{code}"
-        router = self.meta_routers.get(tenant.slug)
-        if router is not None:  # майстер без Telegram підключиться через Messenger
-            link += f"\n\nMessenger: https://m.me/{router.channel.page_id}?ref=m{code}"
         await ctx.send(ctx.at("adm_master_invite", name=master.name, hours=INVITE_HOURS, link=link))
 
     async def admin_master_unlink(self, ctx: Ctx, master_id: str, message_id: int | None, confirmed: bool) -> None:

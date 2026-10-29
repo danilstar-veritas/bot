@@ -4,7 +4,8 @@
 Транспорт — Streamable HTTP (https://modelcontextprotocol.io/specification/2025-06-18/basic/transports):
 POST з JSON-RPC 2.0, відповідь — один JSON. Адреса містить особистий ключ людини
 (<base_url>/mcp/<заклад>/<ключ>) — так конектор працює без окремого входу, а ключ можна будь-коли
-перевипустити в адмінці. Інструменти ті самі, що в помічника персоналу (staff.py), і з тими самими правами.
+перевипустити в адмінці. Інструменти ті самі, що в помічника персоналу (staff.py), і з тими самими правами:
+усе нове, що додається в staff_tools(), зʼявляється тут само. Плюс ask_bot_assistant — розмова з AI самого бота.
 Зміни двокрокові: інструмент готує дію, а confirm_action виконує її — лише після явного «так» людини.
 """
 
@@ -19,12 +20,20 @@ log = logging.getLogger("barberbot.mcp")
 
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 INSTRUCTIONS = (
-    "Tools for running a barbershop's schedule on behalf of its owner or a master: read the schedule, free "
-    "slots, clients, reports; prepare changes (block time, book, reschedule, cancel, no-show, message a client). "
+    "Full admin access to a barbershop's booking bot on behalf of its owner (or a master, with fewer rights). "
+    "Read: schedule, free slots, clients, client chats, reports and stats, shop status (prices, client AI, masters). "
+    "Change: block/unblock time, book, reschedule, cancel, no-show, message a client, set prices, turn the client AI "
+    "on/off, hand a client back to the AI, invite a master, send an Excel export. Use the specific tools first; for "
+    "anything they don't cover, or to talk to the bot's own AI, use ask_bot_assistant. "
     "Every change tool only PREPARES the action and returns action_id and a summary. Show the summary to the user "
     "and call confirm_action(action_id) only after the user explicitly agrees. Dates are YYYY-MM-DD, times HH:MM, "
     "in the shop's local time. Answer in the user's language.")
 EXTRA_TOOLS = [
+    {"name": "ask_bot_assistant",
+     "description": "Say something to the bot's own staff AI in plain words, as the owner would in the bot chat, and "
+                    "get its answer. If it prepares a change, the result has action_id + summary: confirm the same "
+                    "way, with confirm_action after the user agrees.",
+     "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}},
     {"name": "confirm_action",
      "description": "Execute a prepared change. Call ONLY after the user explicitly confirmed this exact summary.",
      "inputSchema": {"type": "object", "properties": {"action_id": {"type": "string"}}, "required": ["action_id"]}},
@@ -86,6 +95,16 @@ class McpServer:
             reply = await staff.confirm(u, str(args.get("action_id") or ""))
             return {"error": reply.error, "message": reply.text} if reply.error else {"ok": True,
                                                                                       "message": reply.text}
+        if name == "ask_bot_assistant":
+            reply = await staff.ask(u, str(args.get("text") or ""))
+            if reply.error:
+                return {"error": reply.error, "message": reply.text}
+            out = {"reply": reply.text}
+            if reply.action:
+                out.update(action_id=reply.action["action_id"], summary=reply.action["summary"],
+                           note="Not executed yet. Show the summary to the user; call confirm_action only after "
+                                "they agree.")
+            return out
         if name == "cancel_action":
             staff.ops.drop(u, str(args.get("action_id") or ""))
             return {"ok": True}

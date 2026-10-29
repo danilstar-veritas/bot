@@ -8,6 +8,9 @@
 - StaffAgent — цикл «модель → інструменти → модель» для розмови з персоналом;
 - StaffAssistant — вхідна точка для каналів: «так»/«ні» на підготовлену дію або нове питання до AI.
 Зміни йдуть через ту саму BookingService і ті самі сповіщення, що й кнопки Telegram-адмінки.
+
+Нова можливість для персоналу = інструмент у staff_tools() (+ _check_/_do_ для змін). Тоді вона одразу
+зʼявляється всюди: у помічнику в боті, кнопці «Говорити» в адмінці, Siri і в конекторі ChatGPT / Claude (mcp.py).
 """
 
 from __future__ import annotations
@@ -242,11 +245,16 @@ class StaffOps:
                 if u.is_owner or bl["master_id"] in (u.master_id, None)]
         return {"blocks": [self.block_view(u, bl) for bl in rows[:60]]}
 
-    def report(self, u: StaffUser, period: str = "today") -> dict:
+    def report(self, u: StaffUser, period: str = "today", days: int | None = None) -> dict:
+        """Підсумки за період; days — довільна кількість останніх днів (разом із сьогоднішнім)."""
         tenant = u.tenant
         today = tenant.today()
         spans = {"today": (today, 1), "yesterday": (today - timedelta(days=1), 1), "tomorrow": (today + timedelta(days=1), 1),
                  "week": (today - timedelta(days=6), 7), "month": (today - timedelta(days=29), 30)}
+        if days:
+            days = max(1, min(self._int(u, days), 3650))
+            period = "custom"
+            spans[period] = (today - timedelta(days=days - 1), days)
         if period not in spans:
             period = "today"
         first, days = spans[period]
@@ -271,12 +279,31 @@ class StaffOps:
             "by_master": [{"master": name, "visits": v["visits"], "revenue": tenant.price_str(round(v["revenue"]))}
                           for name, v in sorted(per.items(), key=lambda kv: -kv[1]["revenue"])],
         }
-        if u.is_owner and period in ("week", "month"):
+        if u.is_owner and days >= 7:
             s = compute_stats(self.db, tenant, self.app.settings, days=days)
             result["bot"] = {"bookings_created": s["created"], "by_ai": s["by_ai"], "by_buttons": s["by_buttons"],
                              "at_night": s["night"], "handled_without_human": s["auto_rate"],
                              "ai_cost_usd": s["cost"]}
         return result
+
+    def shop(self, u: StaffUser) -> dict:
+        """Стан закладу для власника: AI для клієнтів, ціни (змінені й з файлу), хто з майстрів підключений."""
+        if not u.is_owner:
+            raise self._err(u, "owner_only")
+        tenant, app = u.tenant, self.app
+        links = app.master_links(tenant)
+        masters = []
+        for m in tenant.masters.values():
+            client = self.db.get_client_by_tg(tenant.slug, links[m.id]) if m.id in links else None
+            masters.append({"master_id": m.id, "name": m.name, "connected": m.id in links,
+                            "connected_as": app.client_label(tenant, client) if client else "",
+                            "schedule": tenant.schedule_summary(tenant.lang, m)})
+        return {"shop": tenant.name, "client_ai": app.ai_status(tenant),
+                "services": [{"service_id": s.id, "title": s.title, "minutes": s.duration,
+                              "price": tenant.price_str(s.price), "price_in_settings_file": tenant.price_str(s.config_price),
+                              "editable": not s.base_id}
+                             for s in tenant.services.values() if not (s.hidden and not s.base_id)],
+                "masters": masters}
 
     def chats(self, u: StaffUser, hours: int = 72) -> dict:
         """Розмови з клієнтами за останні дні: хто писав, що писав, чи AI зараз на паузі (чекають людину)."""
@@ -469,7 +496,61 @@ class StaffOps:
         return {"client_id": client["id"], "text": text}, \
             self._t(u, "staff_sum_message", client=self.client_name(u, client), text=text)
 
-    KINDS = ("block", "unblock", "no_show", "book", "reschedule", "cancel", "message")
+    def _owner(self, u: StaffUser) -> None:
+        if not u.is_owner:
+            raise self._err(u, "owner_only")
+
+    def _check_price(self, u: StaffUser, a: dict) -> tuple[dict, str]:
+        self._owner(u)
+        tenant = u.tenant
+        s = tenant.services.get(str(a.get("service_id") or ""))
+        if s is None or s.base_id:
+            raise self._err(u, "bad_input")
+        if a.get("price") in (None, ""):
+            price = None  # повернути ціну з файлу налаштувань
+        else:
+            try:
+                price = round(float(str(a["price"]).replace(",", ".")), 2)
+            except ValueError:
+                raise self._err(u, "bad_input") from None
+            if not 0 <= price <= 1_000_000:
+                raise self._err(u, "bad_input")
+        new = s.config_price if price is None else price
+        if new == s.price:
+            raise self._err(u, "same_price")
+        return {"service_id": s.id, "price": price}, \
+            self._t(u, "staff_sum_price", title=s.title, old=tenant.price_str(s.price), new=tenant.price_str(new))
+
+    def _check_client_ai(self, u: StaffUser, a: dict) -> tuple[dict, str]:
+        self._owner(u)
+        on = bool(a.get("on"))
+        return {"on": on}, self._t(u, "staff_sum_ai_on" if on else "staff_sum_ai_off")
+
+    def _check_resume_client(self, u: StaffUser, a: dict) -> tuple[dict, str]:
+        self._owner(u)
+        client = self.db.get_client(self._int(u, a.get("client_id")))
+        if client is None or client["tenant"] != u.tenant.slug:
+            raise self._err(u, "not_found")
+        return {"client_id": client["id"]}, self._t(u, "staff_sum_resume_client", client=self.client_name(u, client))
+
+    def _check_invite(self, u: StaffUser, a: dict) -> tuple[dict, str]:
+        from .masters import INVITE_HOURS
+
+        self._owner(u)
+        master = u.tenant.masters.get(str(a.get("master_id") or ""))
+        if master is None:
+            raise self._err(u, "bad_input")
+        return {"master_id": master.id}, self._t(u, "staff_sum_invite", name=master.name, hours=INVITE_HOURS)
+
+    def _check_export(self, u: StaffUser, a: dict) -> tuple[dict, str]:
+        self._owner(u)
+        if platform_of(u.chat_id) or u.chat_id <= 0:
+            raise self._err(u, "no_telegram")
+        days = max(1, min(self._int(u, a.get("days") or 30), 3650))
+        return {"days": days}, self._t(u, "staff_sum_export", days=days)
+
+    KINDS = ("block", "unblock", "no_show", "book", "reschedule", "cancel", "message",
+             "price", "client_ai", "resume_client", "invite", "export")
 
     def propose(self, u: StaffUser, kind: str, args: dict) -> dict:
         """Перевірити дію й відкласти її до підтвердження. Помилка — StaffError з поясненням."""
@@ -642,6 +723,58 @@ class StaffOps:
         db.log_event(tenant.slug, client["id"], "admin_reply", now, {"text": short(p["text"], 2000)})
         return self._done(u, True)
 
+    async def _do_price(self, u: StaffUser, p: dict) -> str:
+        tenant, app = u.tenant, self.app
+        s = tenant.services[p["service_id"]]
+        old = s.price
+        if p["price"] is None or p["price"] == s.config_price:
+            self.db.kv_delete(tenant.slug, f"price:{s.id}")
+        else:
+            self.db.kv_set(tenant.slug, f"price:{s.id}", f"{p['price']:g}")
+        app.apply_prices(tenant)
+        text = self._t(u, "adm_price_done", title=s.title, old=tenant.price_str(old), new=tenant.price_str(s.price))
+        if any(c.base_id == s.id or c.addon_id == s.id for c in tenant.services.values()):
+            text += self._t(u, "adm_price_combos")
+        note = self._t(u, "adm_price_changed_note", admin=app.client_label(tenant, self.db.get_client(u.client_id)),
+                       title=s.title, old=tenant.price_str(old), new=tenant.price_str(s.price))
+        for admin in tenant.admins:
+            if admin != u.chat_id:
+                await app.send(tenant, admin, note)
+        return text
+
+    async def _do_client_ai(self, u: StaffUser, p: dict) -> str:
+        self.db.kv_set(u.tenant.slug, "paused", "0" if p["on"] else "1")
+        return self._t(u, "adm_resumed_all" if p["on"] else "adm_paused")
+
+    async def _do_resume_client(self, u: StaffUser, p: dict) -> str:
+        self.resume_ai(u, p["client_id"])
+        return self._done(u, None)
+
+    async def _do_invite(self, u: StaffUser, p: dict) -> str:
+        from .masters import INVITE_HOURS
+
+        tenant = u.tenant
+        link = await self.app.master_invite_link(tenant, p["master_id"])
+        if not link:
+            raise StaffError("no_username", strip_tags(self._t(u, "adm_master_no_username")))
+        return self._t(u, "adm_master_invite", name=tenant.masters[p["master_id"]].name, hours=INVITE_HOURS,
+                       link=link)
+
+    async def _do_export(self, u: StaffUser, p: dict) -> str:
+        from .admin_panel import XLSX_MIME
+        from .telegram import NetworkError, TelegramError
+
+        export = self.app.build_export(u.tenant, p["days"])
+        if export is None:
+            raise self._err(u, "export_empty")
+        filename, content, caption = export
+        try:
+            await self.app.apis[u.tenant.slug].send_document(u.chat_id, filename, content, caption=caption,
+                                                             mime=XLSX_MIME)
+        except (TelegramError, NetworkError):
+            raise self._err(u, "no_telegram") from None
+        return self._t(u, "staff_done_export")
+
     def resume_ai(self, u: StaffUser, client_id: int) -> None:
         """Повернути клієнта AI (зняти паузу після передачі розмови людині)."""
         if not u.is_owner:
@@ -667,16 +800,17 @@ RULES = """Ти — помічник персоналу закладу «{name}�
 - Якщо послуга не названа, а для дії вона потрібна, — уточни одним питанням.
 
 ## Зміни
-Закрити чи відкрити час, записати клієнта, перенести, скасувати, позначити неявку, написати клієнту — лише через інструменти. Вони НЕ виконують дію, а готують її і показують людині картку з кнопкою.
+Закрити чи відкрити час, записати клієнта, перенести, скасувати, позначити неявку, написати клієнту, змінити ціну, увімкнути чи вимкнути AI для клієнтів, повернути клієнта AI, запросити майстра, надіслати Excel — лише через інструменти. Вони НЕ виконують дію, а готують її і показують людині картку з кнопкою.
 Після виклику одним реченням перекажи, що буде зроблено, і спитай: «Підтверджуєте?». Виконає система, коли людина скаже «так» або натисне кнопку. Не кажи, що вже зроблено.
 Якщо інструмент повернув помилку — поясни простими словами й запропонуй варіант (інший час — через get_free_slots).
 {rights}
 
 ## Межі
-Лише робота цього закладу: розклад, записи, клієнти, звіти. На інше — одне речення, що ти допомагаєш лише з цим.
+Лише робота цього закладу: розклад, записи, клієнти, ціни, звіти. На інше — одне речення, що ти допомагаєш лише з цим.
 Повідомлення, що починаються з «[Системна подія]», надсилає система."""
 
-RIGHTS_OWNER = "Ти говориш із власником: йому можна все — будь-який майстер, перенесення, скасування, повідомлення клієнтам."
+RIGHTS_OWNER = ("Ти говориш із власником: йому можна все — будь-який майстер, перенесення, скасування, повідомлення "
+                "клієнтам, ціни, AI для клієнтів, запрошення майстрів, звіти й Excel.")
 RIGHTS_MASTER = ("Ти говориш із майстром {master}: він керує лише своїм розкладом — бачить свої записи, закриває "
                  "й відкриває свій час, записує клієнтів до себе, позначає неявку. Переносити й скасовувати записи "
                  "клієнтів може лише власник — так і скажи, якщо майстер просить.")
@@ -700,8 +834,12 @@ def staff_tools() -> list[dict]:
               "date": date_p, "master_id": master_p}, ["service_id", "date"]),
         tool("find_client", "Знайти клієнта за імʼям, частиною імені або номером телефону; з його майбутніми записами.",
              {"query": {"type": "string"}}, ["query"]),
-        tool("get_report", "Підсумки: візити, виручка, неявки, скасування, по майстрах.",
-             {"period": {"type": "string", "enum": ["today", "yesterday", "tomorrow", "week", "month"]}}),
+        tool("get_report", "Підсумки: візити, виручка, неявки, скасування, по майстрах; від 7 днів — і робота бота "
+                           "(записи через AI, уночі, вартість AI). days — довільна кількість останніх днів.",
+             {"period": {"type": "string", "enum": ["today", "yesterday", "tomorrow", "week", "month"]},
+              "days": {"type": "integer", "description": "Останні N днів, 1–3650 (замість period)"}}),
+        tool("get_shop", "Стан закладу (лише власник): чи відповідає AI клієнтам, послуги з цінами "
+                         "(поточна й з файлу налаштувань), майстри та чи підключені вони до бота.", {}),
         tool("list_blocks", "Увесь майбутній закритий час (вихідні, перерви).", {}),
         tool("get_client_chats", "Останні розмови клієнтів із ботом і хто чекає на відповідь людини (лише власник).",
              {}),
@@ -726,12 +864,27 @@ def staff_tools() -> list[dict]:
              {"booking_id": {"type": "integer"}}, ["booking_id"]),
         tool("message_client", "Підготувати: написати клієнту від імені закладу в його чат (лише власник).",
              {"client_id": {"type": "integer"}, "text": {"type": "string"}}, ["client_id", "text"]),
+        tool("set_price", "Підготувати: змінити ціну послуги (лише власник). Без price — повернути ціну з файлу "
+                          "налаштувань. Ціни комбінацій із додатками перераховуються самі.",
+             {"service_id": {"type": "string"}, "price": {"type": "number"}}, ["service_id"]),
+        tool("set_client_ai", "Підготувати: увімкнути (on=true) чи вимкнути (on=false) AI, що відповідає клієнтам. "
+                              "Вимкнений — усі повідомлення клієнтів пересилаються власнику (лише власник).",
+             {"on": {"type": "boolean"}}, ["on"]),
+        tool("return_client_to_ai", "Підготувати: повернути клієнта AI-помічнику, якщо розмову було передано людині "
+                                    "(waiting_for_human у get_client_chats; лише власник).",
+             {"client_id": {"type": "integer"}}, ["client_id"]),
+        tool("invite_master", "Підготувати: нове одноразове посилання, яким майстер підключиться до бота (лише власник).",
+             {"master_id": master_p}, ["master_id"]),
+        tool("export_bookings", "Підготувати: надіслати власнику в Telegram Excel-файл із записами за останні days днів "
+                                "і всіма майбутніми (лише власник).",
+             {"days": {"type": "integer", "description": "1–3650, за замовчуванням 30"}}),
     ]
 
 
 TOOL_KINDS = {"block_time": "block", "unblock_time": "unblock", "create_booking": "book",
               "reschedule_booking": "reschedule", "cancel_booking": "cancel", "mark_no_show": "no_show",
-              "message_client": "message"}
+              "message_client": "message", "set_price": "price", "set_client_ai": "client_ai",
+              "return_client_to_ai": "resume_client", "invite_master": "invite", "export_bookings": "export"}
 
 
 class StaffTools:
@@ -753,11 +906,13 @@ class StaffTools:
             if name == "find_client":
                 return ops.find_clients(u, str(args.get("query") or ""))
             if name == "get_report":
-                return ops.report(u, str(args.get("period") or "today"))
+                return ops.report(u, str(args.get("period") or "today"), args.get("days"))
             if name == "list_blocks":
                 return ops.blocks(u)
             if name == "get_client_chats":
                 return ops.chats(u)
+            if name == "get_shop":
+                return ops.shop(u)
             if name in TOOL_KINDS:
                 self.action = ops.propose(u, TOOL_KINDS[name], args)
                 return {"status": "awaiting_confirmation", "action_id": self.action["action_id"],

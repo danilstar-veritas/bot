@@ -231,6 +231,67 @@ class StaffWebTests(MasterTestCase):
         r = await self.web.handle("POST", f"/mcp/{self.slug}/{'x' * 40}", {}, b"{}")
         self.assertEqual(r.status, 404)  # не 401: інакше claude.ai вимагатиме вхід OAuth для всього сервера
 
+    async def mcp_rpc(self, uid: int = ADMIN_ID):
+        h = await self.login(uid)
+        _, key = await self.call("POST", "api/key", h)
+        path = key["mcp_url"].removeprefix("https://bot.example.com")
+
+        async def tool(name: str, arguments: dict | None = None) -> dict:
+            body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments or {}}}
+            r = await self.web.handle("POST", path, {}, json.dumps(body).encode())
+            return json.loads(r.body)["result"]["structuredContent"]
+
+        async def confirm(prepared: dict) -> dict:
+            self.assertIn("action_id", prepared, prepared)
+            return await tool("confirm_action", {"action_id": prepared["action_id"]})
+
+        return tool, confirm
+
+    async def test_mcp_owner_admin_tools(self):
+        tool, confirm = await self.mcp_rpc()
+        shop = await tool("get_shop")
+        self.assertEqual(shop["client_ai"], "on")
+        self.assertEqual({m["master_id"] for m in shop["masters"]}, {"andriy", "oleg"})
+        # ціна: підготувати → ще стара → підтвердити → нова
+        prepared = await tool("set_price", {"service_id": "beard", "price": 350})
+        self.assertIn("Борода", prepared["summary"])
+        self.assertEqual(self.tenant.services["beard"].price, 300)
+        self.assertTrue((await confirm(prepared))["ok"])
+        self.assertEqual(self.tenant.services["beard"].price, 350)
+        self.assertEqual((await tool("set_price", {"service_id": "beard", "price": 350}))["error"], "same_price")
+        await confirm(await tool("set_price", {"service_id": "beard"}))  # повернути ціну з файлу
+        self.assertEqual(self.tenant.services["beard"].price, 300)
+        # AI для клієнтів
+        await confirm(await tool("set_client_ai", {"on": False}))
+        self.assertEqual(self.app.ai_status(self.tenant), "paused")
+        await confirm(await tool("set_client_ai", {"on": True}))
+        self.assertEqual(self.app.ai_status(self.tenant), "on")
+        # звіт за довільний період і Excel у Telegram
+        report = await tool("get_report", {"days": 90})
+        self.assertEqual((report["period"], "bot" in report), ("custom", True))
+        await confirm(await tool("export_bookings", {"days": 7}))
+        self.assertTrue(self.tg.of("sendDocument", ADMIN_ID)[-1]["filename"].endswith(".xlsx"))
+        # запрошення майстра
+        done = await confirm(await tool("invite_master", {"master_id": "oleg"}))
+        self.assertIn("https://t.me/", done["message"])
+
+    async def test_mcp_master_cannot_use_owner_tools(self):
+        await self.link()
+        tool, _ = await self.mcp_rpc(MASTER_ID)
+        for name, args in (("get_shop", {}), ("set_price", {"service_id": "beard", "price": 1}),
+                           ("set_client_ai", {"on": False}), ("export_bookings", {})):
+            self.assertEqual((await tool(name, args))["error"], "owner_only", name)
+
+    async def test_mcp_talks_to_bot_assistant(self):
+        tool, confirm = await self.mcp_rpc()
+        self.llm.add(tool_call(("set_price", {"service_id": "haircut", "price": 550})),
+                     text_reply("Змінюю ціну стрижки на 550. Підтверджуєте?"))
+        out = await tool("ask_bot_assistant", {"text": "стрижка тепер 550"})
+        self.assertEqual(out["reply"], "Змінюю ціну стрижки на 550. Підтверджуєте?")
+        await confirm(out)
+        self.assertEqual(self.tenant.services["haircut"].price, 550)
+
     async def test_notifications_feed(self):
         h = await self.login()
         await self.call("POST", "api/push", h, {"endpoint": "https://push.example.com/abc"})

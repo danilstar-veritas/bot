@@ -445,25 +445,20 @@ class AdminPanel:
                     await self.send(tenant, admin, note)
 
     # ================================================================ Excel
-    async def admin_export(self, ctx: Ctx, args: str) -> None:
-        tenant = ctx.tenant
-        try:
-            days = max(1, min(int(args.strip() or 30), 3650))
-        except ValueError:
-            await ctx.send(ctx.at("adm_export_usage"))
-            return
+    def build_export(self, tenant, days: int) -> tuple[str, bytes, str] | None:
+        """Excel із записами за останні days днів і всіма майбутніми: (імʼя файлу, вміст, підпис); None — порожньо."""
+        at = lambda key, **kw: tenant.t(tenant.lang, key, **kw)  # noqa: E731
         today = tenant.today()
         start = today - timedelta(days=days)
-        rows = ctx.db.bookings_between(tenant.slug, datetime.combine(start, time.min),
-                                       datetime.combine(today, time.min) + timedelta(days=3650),
-                                       ("active", "no_show", "cancelled"))
+        rows = self.db.bookings_between(tenant.slug, datetime.combine(start, time.min),
+                                        datetime.combine(today, time.min) + timedelta(days=3650),
+                                        ("active", "no_show", "cancelled"))
         if not rows:
-            await ctx.send(ctx.at("adm_export_empty"))
-            return
+            return None
         now = tenant.now()
-        statuses = ctx.at("adm_export_statuses").split("|")      # заплановано|відбувся|не прийшов|скасовано
-        sources = ctx.at("adm_export_sources").split("|")        # сам|AI-чат|адмін
-        prepays = ctx.at("adm_export_prepay").split("|")         # очікуємо|каже, що оплатив|оплачено
+        statuses = at("adm_export_statuses").split("|")      # заплановано|відбувся|не прийшов|скасовано
+        sources = at("adm_export_sources").split("|")        # сам|AI-чат|адмін
+        prepays = at("adm_export_prepay").split("|")         # очікуємо|каже, що оплатив|оплачено
         data = []
         for r in rows:
             if r["status"] == "cancelled":
@@ -481,9 +476,20 @@ class AdminPanel:
                 {"waiting": prepays[0], "claimed": prepays[1], "paid": prepays[2]}.get(r["prepay"], ""),
                 r["note"] or "", r["created_at"],
             ])
-        content = build_xlsx(ctx.at("adm_export_headers").split("|"), data, sheet=ctx.at("adm_export_sheet"),
+        content = build_xlsx(at("adm_export_headers").split("|"), data, sheet=at("adm_export_sheet"),
                              widths=[11, 7, 7, 12, 30, 9, 13, 20, 16, 18, 10, 18, 30, 17])
-        await ctx.api.send_document(ctx.chat_id, f"bookings-{start:%Y-%m-%d}-{today:%Y-%m-%d}.xlsx", content,
-                                    caption=ctx.at("adm_export_caption", count=len(data),
-                                                   start=f"{start:%d.%m.%Y}", today=f"{today:%d.%m.%Y}"),
-                                    mime=XLSX_MIME)
+        caption = at("adm_export_caption", count=len(data), start=f"{start:%d.%m.%Y}", today=f"{today:%d.%m.%Y}")
+        return f"bookings-{start:%Y-%m-%d}-{today:%Y-%m-%d}.xlsx", content, caption
+
+    async def admin_export(self, ctx: Ctx, args: str) -> None:
+        try:
+            days = max(1, min(int(args.strip() or 30), 3650))
+        except ValueError:
+            await ctx.send(ctx.at("adm_export_usage"))
+            return
+        export = self.build_export(ctx.tenant, days)
+        if export is None:
+            await ctx.send(ctx.at("adm_export_empty"))
+            return
+        filename, content, caption = export
+        await ctx.api.send_document(ctx.chat_id, filename, content, caption=caption, mime=XLSX_MIME)
