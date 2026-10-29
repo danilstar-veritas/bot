@@ -7,11 +7,13 @@ import hashlib
 import hmac
 import json
 import unittest
+import urllib.parse
 
 from barberbot import clock
 from barberbot.app import BotApp
 from barberbot.db import DB
 from barberbot.meta import FB_BASE, IG_BASE, MetaWebhook, html_to_text, platform_of, split_text
+from barberbot.web import WebServer
 
 from .helpers import ADMIN_ID, FakeLLM, FakeTelegram, make_settings, make_tenant, set_time, text_reply
 
@@ -170,7 +172,7 @@ class MetaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.graph.calls, [])
 
     async def test_webhook_http_server(self):
-        hook = MetaWebhook(self.app, self.app.meta, self.settings)
+        hook = WebServer(self.settings, MetaWebhook(self.app, self.app.meta, self.settings))
         await hook.start()
         port = hook.server.sockets[0].getsockname()[1]
         body = json.dumps(ig_event("igs-4", "Hi")).encode()
@@ -189,6 +191,24 @@ class MetaTests(unittest.IsolatedAsyncioTestCase):
                 break
             await asyncio.sleep(0.02)
         self.assertIn("🌐", self.graph.last()["text"])
+
+    async def test_book_opens_webapp_button_in_messenger(self):
+        self.app.settings.web_base_url = "https://bot.example.com"
+        from barberbot.webapp import WebApp
+        self.app.webapp = WebApp(self.app)
+        await self.event(fb_event("psid-7", "Hi"))  # вибір мови
+        self.llm.add(text_reply("Szia!"))  # після вибору мови бот відповідає на «Hi»
+        await self.event({"object": "page", "entry": [{"id": PAGE, "messaging": [{"sender": {"id": "psid-7"},
+            "message": {"mid": "m", "text": "lang:hu", "quick_reply": {"payload": "lang:hu"}}}]}]})
+        await self.event({"object": "page", "entry": [{"id": PAGE, "messaging": [{"sender": {"id": "psid-7"},
+            "message": {"mid": "m", "text": "x", "quick_reply": {"payload": "txt:📅 Időpontfoglalás"}}}]}]})
+        tpl = self.graph.last()["attachment"]["payload"]
+        self.assertEqual(tpl["template_type"], "button")
+        button = tpl["buttons"][0]
+        self.assertEqual((button["type"], button["title"]), ("web_url", "📅 Online foglalás"))
+        chat = self.app.meta_routers[self.tenant.slug].channel.chat_id("messenger", "psid-7")
+        token = urllib.parse.parse_qs(urllib.parse.urlsplit(button["url"]).query)["u"][0]
+        self.assertEqual(self.app.webapp.verify(self.tenant.slug, token), chat)
 
     def test_helpers(self):
         self.assertEqual(html_to_text("<b>Ціна</b> &amp; час"), "Ціна & час")

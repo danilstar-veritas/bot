@@ -40,6 +40,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "btn_my": "🗓 Мої записи",
         "btn_prices": "💈 Послуги і ціни",
         "btn_contacts": "📍 Контакти",
+        "btn_webapp": "📅 Онлайн-запис",
+        "webapp_invite": "Оберіть послугу, майстра й зручний час у вікні запису 👇",
         "start": "Вітаю! 👋 Я бот-адміністратор <b>{name}</b>.\n\n"
                  "Допоможу записатися, перенести чи скасувати візит і відповім на питання.\n\n"
                  "Оберіть дію в меню 👇 або просто напишіть, що вас цікавить.",
@@ -204,6 +206,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "ai_status_disabled": "⚪️ вимкнено в налаштуваннях закладу",
         "adm_new_booking": "🆕 <b>Новий запис</b>{via}\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} о {time}\n💰 {price}",
         "adm_via_ai": " · через AI-чат 🤖",
+        "adm_via_web": " · через онлайн-запис 📲",
         "adm_cancelled": "❌ <b>Скасування</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} о {time}",
         "adm_rescheduled": "🔁 <b>Перенесення</b>\n\n👤 {client}\n💈 {service} · {master}\nБуло: {old}\nСтало: <b>{new}</b>",
         "adm_handoff": "🙋 <b>Потрібна ваша відповідь</b>\n\n👤 {client}\n❓ {reason}{summary}\n\n"
@@ -504,6 +507,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "btn_my": "🗓 Мои записи",
         "btn_prices": "💈 Услуги и цены",
         "btn_contacts": "📍 Контакты",
+        "btn_webapp": "📅 Онлайн-запись",
+        "webapp_invite": "Выберите услугу, мастера и удобное время в окне записи 👇",
         "start": "Здравствуйте! 👋 Я бот-администратор <b>{name}</b>.\n\n"
                  "Помогу записаться, перенести или отменить визит и отвечу на вопросы.\n\n"
                  "Выберите действие в меню 👇 или просто напишите, что вас интересует.",
@@ -662,6 +667,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "ai_status_disabled": "⚪️ выключены в настройках заведения",
         "adm_new_booking": "🆕 <b>Новая запись</b>{via}\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} в {time}\n💰 {price}",
         "adm_via_ai": " · через AI-чат 🤖",
+        "adm_via_web": " · через онлайн-запись 📲",
         "adm_cancelled": "❌ <b>Отмена</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} в {time}",
         "adm_rescheduled": "🔁 <b>Перенос</b>\n\n👤 {client}\n💈 {service} · {master}\nБыло: {old}\nСтало: <b>{new}</b>",
         "adm_handoff": "🙋 <b>Нужен ваш ответ</b>\n\n👤 {client}\n❓ {reason}{summary}\n\n"
@@ -961,6 +967,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "btn_my": "🗓 My bookings",
         "btn_prices": "💈 Services & prices",
         "btn_contacts": "📍 Contacts",
+        "btn_webapp": "📅 Book online",
+        "webapp_invite": "Pick a service, a stylist and a time that suits you in the booking window 👇",
         "start": "Hi! 👋 I'm the booking assistant of <b>{name}</b>.\n\n"
                  "I can book, reschedule or cancel your visit and answer your questions.\n\n"
                  "Pick an option in the menu 👇 or just type your question.",
@@ -1118,6 +1126,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "ai_status_disabled": "⚪️ off in the business settings",
         "adm_new_booking": "🆕 <b>New booking</b>{via}\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} at {time}\n💰 {price}",
         "adm_via_ai": " · via AI chat 🤖",
+        "adm_via_web": " · via online booking 📲",
         "adm_cancelled": "❌ <b>Cancellation</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} at {time}",
         "adm_rescheduled": "🔁 <b>Rescheduled</b>\n\n👤 {client}\n💈 {service} · {master}\nWas: {old}\nNow: <b>{new}</b>",
         "adm_handoff": "🙋 <b>Your reply is needed</b>\n\n👤 {client}\n❓ {reason}{summary}\n\n"
@@ -1419,6 +1428,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "btn_my": "🗓 Foglalásaim",
         "btn_prices": "💈 Szolgáltatások és árak",
         "btn_contacts": "📍 Elérhetőségek",
+        "btn_webapp": "📅 Online foglalás",
+        "webapp_invite": "Válasszon szolgáltatást, fodrászt és időpontot a foglalási ablakban 👇",
         "start": "Üdvözlöm! 👋 A(z) <b>{name}</b> foglalási asszisztense vagyok.\n\n"
                  "Segítek időpontot foglalni, áthelyezni vagy lemondani, és válaszolok a kérdéseire.\n\n"
                  "Válasszon a menüből 👇 vagy egyszerűen írja le, mi érdekli.",
@@ -1582,6 +1593,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "ai_status_disabled": "⚪️ kikapcsolva a vállalkozás beállításaiban",
         "adm_new_booking": "🆕 <b>Új foglalás</b>{via}\n\n👤 {client}\n💈 {service} · {master}\n📅 {day}, {time}\n💰 {price}",
         "adm_via_ai": " · AI-chaten keresztül 🤖",
+        "adm_via_web": " · online foglalással 📲",
         "adm_cancelled": "❌ <b>Lemondás</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day}, {time}",
         "adm_rescheduled": "🔁 <b>Áthelyezés</b>\n\n👤 {client}\n💈 {service} · {master}\nEddig: {old}\nMost: <b>{new}</b>",
         "adm_handoff": "🙋 <b>Az Ön válasza szükséges</b>\n\n👤 {client}\n❓ {reason}{summary}\n\n"
@@ -1883,6 +1895,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "btn_my": "🗓 Meine Termine",
         "btn_prices": "💈 Leistungen & Preise",
         "btn_contacts": "📍 Kontakt",
+        "btn_webapp": "📅 Online buchen",
+        "webapp_invite": "Wählen Sie Leistung, Stylist und Termin im Buchungsfenster 👇",
         "start": "Hallo! 👋 Ich bin der Buchungsassistent von <b>{name}</b>.\n\n"
                  "Ich helfe Ihnen, einen Termin zu buchen, zu verschieben oder abzusagen, und beantworte Ihre Fragen.\n\n"
                  "Wählen Sie eine Option im Menü 👇 oder schreiben Sie einfach Ihre Frage.",
@@ -2046,6 +2060,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "ai_status_disabled": "⚪️ in den Einstellungen des Geschäfts ausgeschaltet",
         "adm_new_booking": "🆕 <b>Neuer Termin</b>{via}\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} um {time}\n💰 {price}",
         "adm_via_ai": " · über den KI-Chat 🤖",
+        "adm_via_web": " · über Online-Buchung 📲",
         "adm_cancelled": "❌ <b>Stornierung</b>\n\n👤 {client}\n💈 {service} · {master}\n📅 {day} um {time}",
         "adm_rescheduled": "🔁 <b>Verschoben</b>\n\n👤 {client}\n💈 {service} · {master}\nBisher: {old}\nJetzt: <b>{new}</b>",
         "adm_handoff": "🙋 <b>Ihre Antwort wird benötigt</b>\n\n👤 {client}\n❓ {reason}{summary}\n\n"

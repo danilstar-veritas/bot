@@ -349,6 +349,19 @@ class MetaRouter:
         if parse_mode == "HTML":
             text = html_to_text(text)
         options, links, _ = self._options(chat, kb)
+        url_buttons = [b for row in (kb or {}).get("inline_keyboard") or [] for b in row if b.get("url")]
+        if url_buttons and not options and len(text.strip()) <= 640:
+            # Лише кнопки-посилання (онлайн-запис, карта) — справжні кнопки шаблону Meta, що відкривають сторінку
+            # у вікні всередині Messenger. Якщо платформа шаблон не прийме — нижче надішлемо посиланнями в тексті.
+            message = {"attachment": {"type": "template", "payload": {
+                "template_type": "button", "text": text.strip() or "…",
+                "buttons": [{"type": "web_url", "url": b["url"], "title": qr_title(b["text"]),
+                             "webview_height_ratio": "full"} for b in url_buttons[:3]]}}}
+            try:
+                await self.channel.send(chat, message, tag)
+                return {"message_id": self.next_id(), "chat": {"id": chat}}
+            except MetaError as e:
+                log.info("[%s] Шаблон із кнопками не прийнято (%s), надсилаю посиланням", self.tenant.name, e.message)
         # Довгі підписи кнопок (послуги з ціною тощо) — нумерованим списком у тексті, а кнопки — номери.
         numbered = any(utf16_len(t) > TITLE_MAX for t, p in options if p.startswith("cb:"))
         if numbered:
@@ -524,27 +537,15 @@ class MetaGateway:
 # ================================================================ вебхук
 
 class MetaWebhook:
-    """Маленький HTTP-сервер для вебхука Meta (за ним — Caddy чи інший проксі з HTTPS)."""
+    """Обробник вебхука Meta (/meta/webhook) для HTTP-сервера бота (barberbot/web.py)."""
 
     PATH = "/meta/webhook"
-    MAX_BODY = 1 << 20
 
     def __init__(self, app, gateway: MetaGateway, settings):
         self.app = app
         self.gateway = gateway
         self.secret = settings.meta_app_secret.encode("utf-8")
         self.verify_token = settings.meta_verify_token
-        self.host, self.port = settings.meta_webhook_host, settings.meta_webhook_port
-        self.server: asyncio.base_events.Server | None = None
-
-    async def start(self) -> None:
-        self.server = await asyncio.start_server(self.on_connection, self.host, self.port)
-        log.info("Вебхук Instagram/Messenger слухає %s:%s%s", self.host, self.port, self.PATH)
-
-    async def stop(self) -> None:
-        if self.server is not None:
-            self.server.close()
-            await self.server.wait_closed()
 
     def signature_ok(self, body: bytes, header: str) -> bool:
         expected = "sha256=" + hmac.new(self.secret, body, hashlib.sha256).hexdigest()
@@ -573,37 +574,3 @@ class MetaWebhook:
             return 400, "bad json"
         self.app.spawn(self.gateway.handle(payload))
         return 200, "EVENT_RECEIVED"
-
-    async def on_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        status, text = 400, "bad request"
-        try:
-            head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 15)
-            lines = head.decode("latin-1").split("\r\n")
-            method, target, _ = lines[0].split(" ", 2)
-            headers = {}
-            for line in lines[1:]:
-                if ":" in line:
-                    k, v = line.split(":", 1)
-                    headers[k.strip().lower()] = v.strip()
-            length = int(headers.get("content-length") or 0)
-            if length > self.MAX_BODY:
-                status, text = 413, "too large"
-            else:
-                body = await asyncio.wait_for(reader.readexactly(length), 15) if length else b""
-                status, text = await self.respond(method.upper(), target, headers, body)
-        except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, asyncio.TimeoutError, ValueError):
-            pass
-        except Exception:
-            log.exception("Meta: помилка вебхука")
-            status, text = 500, "error"
-        data = text.encode("utf-8")
-        reason = {200: "OK", 400: "Bad Request", 403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed",
-                  413: "Payload Too Large", 500: "Internal Server Error"}.get(status, "OK")
-        try:
-            writer.write(f"HTTP/1.1 {status} {reason}\r\nContent-Type: text/plain; charset=utf-8\r\n"
-                         f"Content-Length: {len(data)}\r\nConnection: close\r\n\r\n".encode("latin-1") + data)
-            await writer.drain()
-        except OSError:
-            pass
-        finally:
-            writer.close()

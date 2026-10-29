@@ -23,6 +23,8 @@ from .config import RANGE_RE, ConfigError, Settings, Tenant, fmt_hhmm, load_tena
 from .db import DB, dt_str, parse_dt
 from .masters import MASTER_COMMANDS, MasterPanel
 from .meta import PLATFORM_LABEL, MetaChannel, MetaGateway, MetaRouter, MetaWebhook, platform_of
+from .web import WebServer
+from .webapp import WebApp
 from .stats import compute_stats
 from .telegram import NetworkError, TelegramAPI, TelegramError, chunk_text, ibtn, inline_kb, reply_kb, url_btn
 from .texts import Raw
@@ -178,6 +180,7 @@ class BotApp(AdminPanel, MasterPanel):
                 self.meta_routers[slug] = MetaRouter(self.apis[slug], MetaChannel(t, settings, db, meta_transport))
                 self.apis[slug] = self.meta_routers[slug]
         self.meta = MetaGateway(self, self.meta_routers) if self.meta_routers else None
+        self.webapp = WebApp(self) if settings.web_base_url else None
         self.bookings = {slug: BookingService(t, db) for slug, t in self.tenants.items()}
         for t in self.tenants.values():
             self.apply_prices(t)
@@ -203,16 +206,19 @@ class BotApp(AdminPanel, MasterPanel):
 
         tasks = [asyncio.create_task(self.poll(slug), name=f"poll:{slug}") for slug in self.tenants]
         tasks.append(asyncio.create_task(Scheduler(self).run(), name="scheduler"))
-        webhook = None
+        meta_hook = None
         if self.meta and not self.settings.meta_enabled:
             log.warning("Instagram/Messenger налаштовано в закладі, але в settings.toml немає [meta] app_secret "
                         "і verify_token — вебхук не запущено")
         elif self.meta:
-            webhook = MetaWebhook(self, self.meta, self.settings)
+            meta_hook = MetaWebhook(self, self.meta, self.settings)
+        webhook = None
+        if meta_hook or self.webapp:
+            webhook = WebServer(self.settings, meta_hook, self.webapp)
             try:
                 await webhook.start()
             except OSError as e:
-                log.error("Не вдалося запустити вебхук Instagram/Messenger: %s", e)
+                log.error("Не вдалося запустити HTTP-сервер (вебхук Meta / онлайн-запис): %s", e)
                 webhook = None
         try:
             await self.stop_event.wait()
@@ -300,6 +306,8 @@ class BotApp(AdminPanel, MasterPanel):
                                language_code=lang)
             await api.call("setMyCommands",
                            commands=[{"command": "start", "description": tenant.t(tenant.lang, "cmd_start")}])
+            if self.webapp:
+                await api.call("setChatMenuButton", menu_button=self.webapp_menu_button(tenant, tenant.lang))
         except (TelegramError, NetworkError) as e:
             log.warning("[%s] setMyCommands: %s", tenant.name, e)
         masters = set(self.master_links(tenant).values())
@@ -970,10 +978,22 @@ class BotApp(AdminPanel, MasterPanel):
                     return f"{group_prefix}:{i}"
         return menu
 
+    def webapp_menu_button(self, tenant: Tenant, lang: str) -> dict:
+        """Кнопка меню Telegram (ліворуч від поля вводу), що відкриває міні-застосунок запису."""
+        return {"type": "web_app", "text": tenant.t(lang, "btn_webapp").split(" ", 1)[-1],
+                "web_app": {"url": self.webapp.url(tenant)}}
+
     async def flow_services(self, ctx: Ctx, message_id: int | None) -> None:
+        if self.webapp and platform_of(ctx.chat_id):
+            # Instagram/Messenger: замість кнопок-номерів — одна кнопка на зручне вікно запису.
+            url = self.webapp.url(ctx.tenant, ctx.chat_id, ctx.lang)
+            await ctx.send(ctx.t("webapp_invite"), inline_kb([[url_btn(ctx.t("btn_webapp"), url)]]))
+            return
         # Текст над кнопками — одне довге речення: у Telegram кнопки такої ж ширини, як повідомлення над ними,
         # і з коротким текстом їхні підписи обрізаються.
         grouped, rows = self.service_menu(ctx, "bs", "bg", ctx.lang)
+        if self.webapp and ctx.chat_id > 0:
+            rows.insert(0, [{"text": ctx.t("btn_webapp"), "web_app": {"url": self.webapp.url(ctx.tenant)}}])
         await ctx.show(message_id, ctx.t("choose_group" if grouped else "choose_service"), inline_kb(rows))
 
     async def flow_group(self, ctx: Ctx, index: int, message_id: int | None) -> None:
@@ -1104,6 +1124,13 @@ class BotApp(AdminPanel, MasterPanel):
                 await ctx.show(message_id, ctx.t("booking_error"))
             return
         self.pending.pop(key, None)
+        await self.announce_booking(ctx, b, source, message_id)
+
+    async def announce_booking(self, ctx: Ctx, b, source: str, message_id: int | None = None) -> None:
+        """Після створення запису клієнтом (кнопки, AI-чат, міні-застосунок): підтвердження клієнту,
+        нотатка для AI, сповіщення власнику й майстру."""
+        tenant = ctx.tenant
+        start = parse_dt(b["start_at"])
         address = tenant.info_in("address", ctx.lang)
         text = ctx.t("booked", **tenant.booking_names(b, ctx.lang),
                      day=tenant.day_label(start.date(), ctx.lang), time=fmt_hhmm(start),
@@ -1121,7 +1148,8 @@ class BotApp(AdminPanel, MasterPanel):
                  f"Клієнт підтвердив запис №{b['id']}: {b['service_title']}, {b['master_name']}, "
                  f"{start:%d.%m.%Y} о {fmt_hhmm(start)}.", self.settings)
         if tenant.notify_new_bookings or b["prepay"]:
-            note = ctx.at("adm_new_booking", via=ctx.at("adm_via_ai") if source == "ai" else "",
+            via = ctx.at("adm_via_ai") if source == "ai" else ctx.at("adm_via_web") if source == "web" else ""
+            note = ctx.at("adm_new_booking", via=via,
                           client=self.client_label(tenant, ctx.db.get_client(ctx.client_id)),
                           service=b["service_title"], master=b["master_name"],
                           day=tenant.day_label(start.date(), tenant.lang),

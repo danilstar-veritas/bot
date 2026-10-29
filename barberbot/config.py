@@ -226,8 +226,10 @@ class Settings:
     # Instagram / Messenger (Meta): вебхук, на який Meta надсилає повідомлення клієнтів.
     meta_app_secret: str = ""     # App Secret застосунку Meta — ним перевіряємо підпис кожного вебхука
     meta_verify_token: str = ""   # довільний рядок, який ви вписуєте в налаштуваннях вебхука на developers.facebook.com
+    # HTTP-сервер бота (вебхук Meta і міні-застосунок запису) слухає тут; назовні його відкриває Caddy.
     meta_webhook_host: str = "127.0.0.1"
     meta_webhook_port: int = 8088
+    web_base_url: str = ""        # публічна адреса, напр. https://bot.example.com — вмикає міні-застосунок запису
     meta_graph_base: str = "https://graph.facebook.com"
     meta_graph_version: str = "v23.0"
 
@@ -275,6 +277,10 @@ def load_settings(path: Path, base_dir: Path | None = None) -> Settings:
     if thinking not in ("adaptive", "disabled"):
         raise ConfigError(f"{path.name} → thinking: допустимо adaptive або disabled.")
     meta = s.section("meta")
+    web = s.section("web")
+    web_base_url = web.str("base_url").rstrip("/")
+    if web_base_url and not web_base_url.startswith("https://"):
+        raise ConfigError(f"{path.name} → [web] → base_url: адреса має починатися з https:// (Telegram відкриває лише HTTPS).")
     data_dir = Path(adv.str("data_dir", "data") or "data")
     if not data_dir.is_absolute():
         data_dir = base_dir / data_dir
@@ -304,7 +310,8 @@ def load_settings(path: Path, base_dir: Path | None = None) -> Settings:
         meta_app_secret=os.environ.get("META_APP_SECRET", "").strip() or meta.str("app_secret"),
         meta_verify_token=meta.str("verify_token"),
         meta_webhook_host=meta.str("webhook_host", "127.0.0.1") or "127.0.0.1",
-        meta_webhook_port=meta.int("webhook_port", 8088, 1, 65535),
+        meta_webhook_port=web.int("port", meta.int("webhook_port", 8088, 1, 65535), 1, 65535),
+        web_base_url=web_base_url,
         meta_graph_base=meta.str("graph_base", "https://graph.facebook.com").rstrip("/") or "https://graph.facebook.com",
         meta_graph_version=meta.str("graph_version", "v23.0") or "v23.0",
     )

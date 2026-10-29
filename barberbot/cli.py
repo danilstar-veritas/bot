@@ -172,8 +172,15 @@ def cmd_check() -> int:
             channel = MetaChannel(t, settings, db)
             where = "Instagram і Messenger" if t.meta_instagram_id else "Messenger"
             try:
-                page = channel._call_sync("GET", t.meta_page_id, {"fields": "name"})
-                print(f"   {OK} {where}: сторінка «{page.get('name') or t.meta_page_id}» — токен правильний")
+                info = channel._call_sync("GET", "debug_token", {"input_token": t.meta_page_token}).get("data") or {}
+                if not info.get("is_valid") or str(info.get("profile_id")) != t.meta_page_id:
+                    problems += 1
+                    print(f"   {FAIL} Токен Meta недійсний або не від сторінки {t.meta_page_id}. Згенеруйте новий.")
+                elif "pages_messaging" not in (info.get("scopes") or []):
+                    problems += 1
+                    print(f"   {FAIL} У токена сторінки немає дозволу pages_messaging — згенеруйте токен заново.")
+                else:
+                    print(f"   {OK} {where}: сторінка {t.meta_page_id} — токен правильний")
             except MetaError as e:
                 problems += 1
                 print(f"   {FAIL} Meta відхилила токен сторінки: {e.message}. Перевірте [meta] page_access_token.")
