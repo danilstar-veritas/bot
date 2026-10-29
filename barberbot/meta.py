@@ -274,7 +274,8 @@ class MetaRouter:
             return True
         if method in ("editMessageText", "editMessageCaption"):
             raise TelegramError(400, "Bad Request: message can't be edited")
-        if method in ("editMessageReplyMarkup", "deleteMessage", "setMyCommands", "deleteMyCommands"):
+        if method in ("editMessageReplyMarkup", "deleteMessage", "setMyCommands", "deleteMyCommands",
+                      "setChatMenuButton"):
             return True
         raise TelegramError(400, f"Bad Request: {method} is not supported in Instagram/Messenger")
 

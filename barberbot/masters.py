@@ -66,8 +66,11 @@ class MasterPanel:
         if names:
             await api.call("setMyCommands", scope=scope,
                            commands=[{"command": c, "description": tenant.t(tenant.lang, f"cmd_{c}")} for c in names])
+            # Кнопка ліворуч від поля вводу: персоналу — меню команд, а не онлайн-запис, як у клієнтів.
+            await api.call("setChatMenuButton", chat_id=chat_id, menu_button={"type": "commands"})
         else:
             await api.call("deleteMyCommands", scope=scope)
+            await api.call("setChatMenuButton", chat_id=chat_id)  # кнопка за замовчуванням — як у всіх клієнтів
 
     async def _chat_commands_quiet(self, tenant: Tenant, chat_id: int, master: bool) -> None:
         try:

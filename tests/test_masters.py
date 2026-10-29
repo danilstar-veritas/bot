@@ -86,6 +86,7 @@ class LinkingTests(MasterTestCase):
         self.assertIn("відключено", self.last(ADMIN_ID)["text"])
         self.assertIn("Вас відключено", self.last()["text"])
         self.assertEqual(self.tg.of("deleteMyCommands")[-1]["scope"]["chat_id"], MASTER_ID)
+        self.assertNotIn("menu_button", self.tg.of("setChatMenuButton", MASTER_ID)[-1])  # знову кнопка запису
         self.assertEqual(self.app.master_links(self.tenant), {})
 
     async def test_admin_unlinks_self_gets_client_menu(self):

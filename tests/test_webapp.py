@@ -130,8 +130,10 @@ class WebAppTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_bot_buttons(self):
         await self.app.setup_commands(self.tenant.slug)
-        button = self.tg.of("setChatMenuButton")[-1]["menu_button"]
+        button = [p for p in self.tg.of("setChatMenuButton") if "chat_id" not in p][-1]["menu_button"]
         self.assertEqual(button["type"], "web_app")
+        admin = self.tg.of("setChatMenuButton", ADMIN_ID)[-1]["menu_button"]
+        self.assertEqual(admin["type"], "commands")  # персоналу — меню команд, а не запис
         self.assertEqual(button["web_app"]["url"], f"https://bot.example.com/app/{self.tenant.slug}/")
         await self.app.handle_update(self.tenant.slug, msg(text="📅 Записатися"))
         first = self.tg.last(CLIENT_ID)["reply_markup"]["inline_keyboard"][0][0]
