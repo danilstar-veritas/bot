@@ -19,6 +19,7 @@ import json
 import logging
 import re
 import secrets
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
@@ -300,7 +301,10 @@ class StaffOps:
                             "schedule": tenant.schedule_summary(tenant.lang, m)})
         return {"shop": tenant.name, "client_ai": app.ai_status(tenant),
                 "services": [{"service_id": s.id, "title": s.title, "minutes": s.duration,
-                              "price": tenant.price_str(s.price), "price_in_settings_file": tenant.price_str(s.config_price),
+                              "price": tenant.price_str(s.price),
+                              # у комбінацій «послуга + додаток» ціни з файлу немає — вона рахується з частин
+                              "price_in_settings_file": tenant.price_str(s.config_price)
+                              if s.config_price is not None else None,
                               "editable": not s.base_id}
                              for s in tenant.services.values() if not (s.hidden and not s.base_id)],
                 "masters": masters}
@@ -823,7 +827,7 @@ def staff_tools() -> list[dict]:
 
     date_p = {"type": "string", "description": "Дата YYYY-MM-DD"}
     time_p = {"type": "string", "description": "Час HH:MM"}
-    master_p = {"type": "string", "description": "id майстра з розділу «Майстри»"}
+    master_p = {"type": "string", "description": "id майстра (з розділу «Майстри» чи довідника конектора)"}
     return [
         tool("get_schedule", "Записи, закритий час і години роботи на день або кілька днів.",
              {"date": {**date_p, "description": "Перший день, YYYY-MM-DD (за замовчуванням сьогодні)"},
@@ -887,6 +891,28 @@ TOOL_KINDS = {"block_time": "block", "unblock_time": "unblock", "create_booking"
               "return_client_to_ai": "resume_client", "invite_master": "invite", "export_bookings": "export"}
 
 
+def _plain(text) -> str:
+    """Для порівняння імен: без регістру, наголосів і зайвих пробілів («Máté» = «mate»)."""
+    decomposed = unicodedata.normalize("NFKD", str(text or "")).casefold()
+    return " ".join("".join(c for c in decomposed if not unicodedata.combining(c)).split())
+
+
+def resolve_ids(tenant: Tenant, args: dict) -> dict:
+    """Зовнішній AI (конектор) часто передає імʼя майстра чи назву послуги замість id — переводимо в id.
+    Невідоме значення лишаємо як є: перевірка далі поверне зрозумілу помилку."""
+    args = dict(args)
+    for key, items, field_name in (("master_id", tenant.masters, "name"), ("service_id", tenant.services, "title")):
+        value = args.get(key)
+        if not isinstance(value, str) or not value or value in items or value in ("any", "all", "*"):
+            continue
+        wanted = _plain(value)
+        found = [i for i, item in items.items() if wanted == _plain(i)
+                 or wanted in {_plain(item.tr(field_name, lang)) for lang in tenant.languages}]
+        if len(found) == 1:
+            args[key] = found[0]
+    return args
+
+
 class StaffTools:
     """Виконує виклики інструментів моделі (і MCP-клієнтів) від імені людини з персоналу."""
 
@@ -896,7 +922,7 @@ class StaffTools:
         self.action: dict | None = None  # підготовлена дія (остання)
 
     def run(self, name: str, args) -> dict:
-        args = args if isinstance(args, dict) else {}
+        args = resolve_ids(self.u.tenant, args) if isinstance(args, dict) else {}
         ops, u = self.ops, self.u
         try:
             if name == "get_schedule":

@@ -8,9 +8,10 @@ from datetime import datetime
 
 from barberbot import webpush
 from barberbot.app import BotApp
-from barberbot.staff import staff_user
+from barberbot.staff import resolve_ids, staff_user
 
-from .helpers import ADMIN_ID, CLIENT_ID, last_tool_result, make_settings, msg, text_reply, tool_call
+from .helpers import (ADMIN_ID, CLIENT_ID, last_tool_result, make_settings, make_tenant, msg, text_reply,
+                      tool_call)
 from .test_masters import MASTER_ID, MasterTestCase
 
 
@@ -292,6 +293,23 @@ class StaffWebTests(MasterTestCase):
         await confirm(out)
         self.assertEqual(self.tenant.services["haircut"].price, 550)
 
+    async def test_mcp_names_instead_of_ids(self):
+        """Зовнішній AI не знає id: «Олег», «oleg», «ОЛЕГ» — той самий майстер; довідник id — в інструкціях."""
+        h = await self.login()
+        _, key = await self.call("POST", "api/key", h)
+        path = key["mcp_url"].removeprefix("https://bot.example.com")
+        r = await self.web.handle("POST", path, {}, json.dumps(
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).encode())
+        self.assertIn("oleg = Олег", json.loads(r.body)["result"]["instructions"])
+        tool, confirm = await self.mcp_rpc()
+        prepared = await tool("block_time", {"date": "2026-10-28", "time_from": "14:00", "time_to": "16:00",
+                                             "master_id": "Олег"})
+        await confirm(prepared)
+        self.assertEqual(self.db.future_blocks(self.slug, self.tenant.now())[0]["master_id"], "oleg")
+        self.assertEqual(resolve_ids(self.tenant, {"service_id": "борода", "master_id": "ANDRIY"}),
+                         {"service_id": "beard", "master_id": "andriy"})
+        self.assertEqual(resolve_ids(self.tenant, {"master_id": "Хтось"}), {"master_id": "Хтось"})
+
     async def test_notifications_feed(self):
         h = await self.login()
         await self.call("POST", "api/push", h, {"endpoint": "https://push.example.com/abc"})
@@ -322,3 +340,13 @@ class WebPushTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShopWithCombosTests(MasterTestCase):
+    async def test_get_shop_with_addon_combos(self):
+        tenant = make_tenant(extra='\n[[services]]\nid = "wash"\ntitle = "Миття"\nduration = 15\nprice = 150\n'
+                                   'addon_for = ["haircut"]\n')
+        app = BotApp(self.settings, [tenant], self.db, None, api_factory=lambda t: self.tg)
+        shop = app.staff.ops.shop(staff_user(app, tenant, ADMIN_ID))
+        combo = next(s for s in shop["services"] if s["service_id"] == "haircut+wash")
+        self.assertEqual((combo["price_in_settings_file"], combo["editable"]), (None, False))

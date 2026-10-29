@@ -59,6 +59,19 @@ class McpServer:
     def _fail(req_id, code: int, message: str) -> dict:
         return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
 
+    @staticmethod
+    def instructions(u) -> str:
+        """Інструкції + довідник id: зовнішній AI не бачить налаштувань закладу, а інструменти чекають id."""
+        tenant = u.tenant
+        who = "owner" if u.is_owner else "master " + tenant.masters[u.master_id].name
+        masters = "; ".join(f"{m.id} = {m.name}" for m in tenant.masters.values())
+        services = "; ".join(f"{s.id} = {s.title} ({s.duration} min, {tenant.price_str(s.price)})"
+                             for s in tenant.services.values() if not (s.hidden and not s.base_id))
+        now = tenant.now()
+        return (INSTRUCTIONS + f" Shop: {tenant.name}. You act as the {who}. Now in the shop: "
+                f"{now:%Y-%m-%d %A %H:%M}. Masters (master_id = name): {masters}. "
+                f"Services (service_id = title): {services}.")
+
     async def call(self, u, request: dict) -> dict | None:
         """Один запит JSON-RPC → відповідь (None — це було сповіщення, відповідати не треба)."""
         if not isinstance(request, dict) or request.get("jsonrpc") != "2.0" or not request.get("method"):
@@ -73,8 +86,7 @@ class McpServer:
                 "protocolVersion": version if version in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0],
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": "barberbot", "title": u.tenant.name, "version": "1.0"},
-                "instructions": INSTRUCTIONS + f" Shop: {u.tenant.name}. You act as the "
-                                               f"{'owner' if u.is_owner else 'master ' + u.tenant.masters[u.master_id].name}.",
+                "instructions": self.instructions(u),
             })
         if method == "ping":
             return self._ok(req_id, {})
@@ -84,6 +96,8 @@ class McpServer:
             name = str(params.get("name") or "")
             args = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
             out = await self.run_tool(u, name, args)
+            log.info("MCP %s tool %s → %s", u.tenant.slug, name,
+                     f"error {out['error']}: {out.get('message', '')}" if "error" in out else "ok")
             self.app.db.log_event(u.tenant.slug, u.client_id, "mcp_call", u.tenant.now(), {"tool": name})
             return self._ok(req_id, {"content": [{"type": "text", "text": json.dumps(out, ensure_ascii=False)}],
                                      "structuredContent": out, "isError": "error" in out})
