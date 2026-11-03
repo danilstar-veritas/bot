@@ -40,6 +40,8 @@ class Scheduler:
             try:
                 await self.prepay_timeouts(slug)
                 await self.reminders(slug)
+                if self.app.tenants[slug].notifications_paused:
+                    continue  # [notifications] paused = true — усі сповіщення на паузі
                 await self.nudges(slug)
                 await self.digest(slug)
                 await self.master_digest(slug)
@@ -113,7 +115,7 @@ class Scheduler:
                 due.append(hours)
             if sent != before:
                 db.set_booking_field(b["id"], "reminders_sent", ",".join(sorted(sent, key=int)))
-            if due and not b["blocked"]:
+            if due and not b["blocked"] and not tenant.notifications_paused:
                 lang = b["lang"] or tenant.lang
                 sent_msg = await app.send(tenant, b["tg_id"], app.reminder_text(tenant, b, lang),
                                           app.reminder_kb(tenant, b, lang), tag="event")

@@ -394,6 +394,7 @@ class Tenant:
     repeat_after_days: int
     repeat_send_at: time
     notify_new_bookings: bool
+    notifications_paused: bool
     digest_at: time | None
     ai_enabled: bool
     ai_address_form: str
@@ -842,6 +843,7 @@ def load_tenant(path: Path, require_token: bool = True) -> Tenant:
         repeat_after_days=rv.int("after_days", 28, 3, 365),
         repeat_send_at=repeat_send_at,
         notify_new_bookings=n.bool("new_bookings", True),
+        notifications_paused=n.bool("paused", False),
         digest_at=digest_at,
         ai_enabled=ai.bool("enabled", True),
         ai_address_form=address_form,

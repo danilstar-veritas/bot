@@ -71,6 +71,8 @@ send_at = "11:00"
 
 
 [notifications]
+# ПАУЗА: true — бот не шле жодних сповіщень (нагадування, зведення, повідомлення адмінам/майстрам). Верніть false, щоб увімкнути.
+paused = true
 new_bookings = true
 digest_at = "08:00"
 report_at = "20:00"
@@ -87,7 +89,7 @@ pay_within_hours = 2
 
 
 [ai]
-enabled = true
+enabled = false
 address_form = "ви"          # ввічлива форма («Ön»)
 handoff_pause_hours = 12
 max_messages_per_hour = 20

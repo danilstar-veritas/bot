@@ -481,6 +481,8 @@ class MasterPanel:
         return tg
 
     async def notify_master(self, tenant: Tenant, b, key: str, **extra) -> None:
+        if tenant.notifications_paused:
+            return
         chat = self.master_chat(tenant, b["master_id"])
         if chat is None:
             return

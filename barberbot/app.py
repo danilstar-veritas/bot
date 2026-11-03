@@ -438,6 +438,8 @@ class BotApp(AdminPanel, MasterPanel):
 
     async def notify_admins(self, tenant: Tenant, text: str, kb: dict | None = None,
                             client_id: int | None = None) -> None:
+        if tenant.notifications_paused:
+            return
         if self.staff_web:
             self.staff_web.notify(tenant, tenant.admins, text)
         # Усім адміністраторам одночасно, а не по черзі.
